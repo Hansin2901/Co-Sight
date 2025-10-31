@@ -33,6 +33,8 @@ class Plan:
     def __init__(self, title: str = "", steps: List[str] = None, dependencies: Dict[int, List[int]] = None, work_space_path: str = ""):
         self.title = title
         self.steps = steps if steps else []
+        # LangFuse session tracking - each plan (research task) gets a unique session ID
+        self.session_id = f"research-task-{id(self)}"  # Use object ID for unique session
         # 使用步骤内容（中文）作为key存储状态、备注和详细信息
         self.step_statuses = {step: "not_started" for step in self.steps}
         self.step_notes = {step: "" for step in self.steps}
