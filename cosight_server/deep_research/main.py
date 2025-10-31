@@ -99,6 +99,12 @@ for config_group in optional_model_configs:
 
 logger.info("=== 环境变量检查结束 ===\n")
 
+# Initialize LangFuse Observability
+logger.info("\n=== LangFuse Observability Setup ===")
+from app.cosight.llm.langfuse_config import initialize_langfuse, shutdown_langfuse
+initialize_langfuse()
+logger.info("=== LangFuse Setup Complete ===\n")
+
 from cosight_server.deep_research.services.i18n_service import i18n
 # custom_config的初始化必须放在最开始
 from cosight_server.sdk.common.config import custom_config
@@ -232,6 +238,10 @@ if __name__ == '__main__':
     logger.info('*****************')
     logger.info('cosight server staring...')
     args.port = custom_config.get("search_port")
+
+    # Register shutdown handler for LangFuse
+    import atexit
+    atexit.register(shutdown_langfuse)
 
     # 提高WebSocket最大消息大小（默认16MB），这里设置为256MB
     uvicorn.run(app=app, host="0.0.0.0", port=int(args.port), ws_max_size=256 * 1024 * 1024)
