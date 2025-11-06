@@ -66,9 +66,23 @@ def initialize_langfuse() -> Optional[any]:
         return _langfuse_client
     
     try:
+        # Initialize OpenTelemetry ThreadingInstrumentor for automatic context propagation
+        # This enables trace context to automatically propagate to child threads
+        # See: https://langfuse.com/docs/observability/sdk/python/advanced-usage
+        try:
+            from opentelemetry.instrumentation.threading import ThreadingInstrumentor
+            ThreadingInstrumentor().instrument()
+            logger.info("[LangFuse] ✅ ThreadingInstrumentor initialized - context will propagate to threads")
+        except ImportError:
+            logger.warning("[LangFuse] ⚠️  opentelemetry-instrumentation-threading not installed")
+            logger.warning("[LangFuse] Install with: uv add opentelemetry-instrumentation-threading")
+            logger.warning("[LangFuse] Threading context propagation may not work correctly")
+        except Exception as e:
+            logger.warning(f"[LangFuse] ⚠️  Failed to initialize ThreadingInstrumentor: {e}")
+
         # Import LangFuse
         from langfuse import Langfuse
-        
+
         # Get configuration from environment
         host = os.getenv('LANGFUSE_HOST', 'https://cloud.langfuse.com')
         public_key = os.getenv('LANGFUSE_PUBLIC_KEY')
