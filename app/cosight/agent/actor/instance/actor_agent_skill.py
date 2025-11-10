@@ -107,6 +107,35 @@ def tavily_search_skill():
     }
 
 
+def gensee_search_skill():
+    return {
+        'skill_name': 'gensee_search',
+        'skill_type': "function",
+        'display_name_zh': 'Gensee搜索',
+        'display_name_en': 'Gensee Search',
+        'description_zh': '使用Gensee搜索引擎搜索给定查询的信息',
+        'description_en': 'Use Gensee search engine to search information for the given query',
+        'semantic_apis': ["api_search"],
+        'function': SkillFunction(
+            id='4c44f9ad-be5c-4e6c-a9d8-1426b23828a1',
+            name='app.cosight.search_toolkit.gensee_search',
+            description_zh='通过Gensee搜索引擎获取查询结果',
+            description_en='Get search results using Gensee search engine',
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description_zh": "要搜索的查询内容",
+                        "description_en": "Query to be searched"
+                    }
+                },
+                "required": ["query"]
+            }
+        )
+    }
+
+
 def search_duckgo_skill():
     return {
         'skill_name': 'search_duckgo',

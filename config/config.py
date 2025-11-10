@@ -187,6 +187,11 @@ def get_tavily_config() -> Optional[str]:
     return os.environ.get("TAVILY_API_KEY")
 
 
+def get_gensee_config() -> Optional[str]:
+    """获取gensee兼容API配置"""
+    return os.environ.get("GENSEE_API_KEY")
+
+
 def validate_config(config: dict) -> bool:
     """验证必要配置是否存在"""
     if not config.get("api_key"):

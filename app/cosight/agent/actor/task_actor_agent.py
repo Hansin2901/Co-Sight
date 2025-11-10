@@ -101,6 +101,7 @@ class TaskActorAgent(BaseAgent):
                          "search_google": search_toolkit.search_google,
                          "search_wiki": search_toolkit.search_wiki,
                          "tavily_search": search_toolkit.tavily_search,
+                         "gensee_search": search_toolkit.gensee_search,
                         #  "image_search": tavily_search.search,
                          "audio_recognition": audio_toolkit.speech_to_text,
                          # "search_duckgo": search_toolkit.search_duckduckgo,
