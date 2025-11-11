@@ -16,10 +16,13 @@
 import os
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Literal, Optional, TypeAlias, Union
+import asyncio
 
 import requests
+import aiohttp
 
 from app.common.logger_util import logger
+from config.config import get_gensee_config
 
 class SearchToolkit:
     r"""A class representing a toolkit for web search.
@@ -709,3 +712,52 @@ class SearchToolkit:
         except Exception as e:
             logger.error(f'error": f"An unexpected error occurred: {str(e)}', exc_info=True)
             return [{"error": f"An unexpected error occurred: {e!s}"}]
+
+    def gensee_search(
+            self, query: str, num_results: int = 5, **kwargs
+    ) -> List[Dict[str, Any]]:
+        r"""Use Gensee Search API to search information for the given query.
+
+        Args:
+            query (str): The query to be searched.
+            num_results (int): The number of search results to retrieve
+                (default is `5`).
+            **kwargs: Additional optional parameters (currently not used).
+
+        Returns:
+            List[Dict[str, Any]]: A list of dictionaries representing search
+                results. Each dictionary contains:
+                - 'result_id' (int): The result's index.
+                - 'title' (str): The title of the result.
+                - 'description' (str): A brief description of the result.
+                - 'url' (str): The URL of the result.
+                - 'content' (str): Relevant content from the search result.
+        """
+        Gensee_API_KEY = get_gensee_config()
+        if not Gensee_API_KEY:
+            raise ValueError(
+                "`GENSEE_API_KEY` not found in environment variables. "
+                "Get `GENSEE_API_KEY` from Gensee platform."
+            )
+
+        url = "https://platform.gensee.ai/tool/search"
+    
+        payload = {
+            "query": query,
+            "max_results": num_results,
+            "mode": "evidence"
+        }
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {Gensee_API_KEY}'
+        }
+
+        try:
+            response = requests.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+            response_json = response.json()
+            response_json["query"] = query
+            return response_json
+        except requests.RequestException as e:
+            print(f"Error calling endpoint: {e}")
+            return None
