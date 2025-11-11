@@ -25,5 +25,4 @@ tavily-python==0.7.2
 python-socks
 markdownify
 minify-html
-langfuse
 opentelemetry-instrumentation-threading
