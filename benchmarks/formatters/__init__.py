@@ -1,1 +1,0 @@
-# Formatters for different benchmarks
