@@ -117,12 +117,15 @@ def run_benchmark(input_csv, output_file, start_idx=0, end_idx=None, resume=Fals
             logger.info(f"Starting CoSight execution for {task_id}...")
             result = cosight.execute(prompt['question'])
             logger.info(f"CoSight execution completed for {task_id}")
+            logger.info(f"Execute returned: {result[:200]}..." if len(result) > 200 else result)
 
             # Format output for DeepResearch Bench
+            # IMPORTANT: Pass the cosight instance, not the execute() result
+            # The actual report is in cosight.plan.get_plan_result()
             formatted_result = format_deepresearch_output(
                 task_id=task_id,
                 question=prompt['question'],
-                cosight_result=result
+                cosight_instance=cosight
             )
 
             # Save result incrementally
