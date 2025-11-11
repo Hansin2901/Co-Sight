@@ -2,6 +2,20 @@
 
 ## TL;DR - Run DeepResearch Bench in 3 Steps
 
+### 0. Enable LangFuse Observability (Optional but Recommended)
+
+To track all LLM calls, tool executions, and benchmark runs:
+
+```bash
+# Edit your .env file
+ENABLE_LANGFUSE=true
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_HOST=https://cloud.langfuse.com
+```
+
+Each research task will be traced as a single trace with all parallel executions properly tracked!
+
 ### 1. Convert Official Prompts to CSV
 
 ```bash

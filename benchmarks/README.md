@@ -25,6 +25,33 @@ export GEMINI_API_KEY="your_gemini_api_key_here"
 export JINA_API_KEY="your_jina_api_key_here"  # Optional, for FACT evaluation
 ```
 
+### LangFuse Observability (Optional but Recommended)
+
+The benchmark runner automatically integrates with LangFuse to trace all LLM calls and tool executions. To enable:
+
+```bash
+# In your .env file
+ENABLE_LANGFUSE=true
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_HOST=https://cloud.langfuse.com  # or your self-hosted instance
+```
+
+**Benefits:**
+- 📊 **Single trace per research task** - All parallel thread executions grouped together
+- 🔍 **Detailed observability** - Track every LLM call, tool execution, and decision
+- 💰 **Cost tracking** - Monitor API costs across benchmark runs
+- ⚡ **Performance metrics** - Analyze execution time and bottlenecks
+- 🐛 **Debugging** - Inspect failed tasks with full context
+
+The runner will automatically:
+1. Initialize LangFuse at startup
+2. Create one trace per research task
+3. Propagate context to all parallel threads (via OpenTelemetry)
+4. Flush all traces on completion
+
+View your traces at: https://cloud.langfuse.com (or your configured host)
+
 ### 2. Prepare Prompts
 
 **Option A: Use your own CSV**
