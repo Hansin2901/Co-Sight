@@ -51,7 +51,7 @@ def create_actor_template(template_name, work_space_path):
         'default_replay_en': 'Task Execution Expert',
         "icon": "",
         'skills': [execute_code_skill(work_space_path),
-                   search_baidu_skill(),
+                #    search_baidu_skill(),
                    mark_step_skill(),
                    browser_use_skill(),
                    file_saver_skill(),
@@ -62,6 +62,8 @@ def create_actor_template(template_name, work_space_path):
                    extract_document_content_skill(),
                    create_html_report_skill(),
                    fetch_website_content_skill(),
+                   fetch_website_content_with_images_skill(),
+                   fetch_website_images_only_skill(),
                    # search_duckgo_skill(),
                    search_wiki_skill(),
                    audio_recognition_skill(),
@@ -79,7 +81,9 @@ def create_actor_template(template_name, work_space_path):
 
 def load_search_skill(template_content):
     import os
-    if os.environ.get("GOOGLE_API_KEY", "") and os.environ.get("SEARCH_ENGINE_ID", ""):
-        template_content['skills'].extend([search_google_skill()])
-    if os.environ.get("TAVILY_API_KEY", ""):
-        template_content['skills'].extend([tavily_search_skill(), search_image_skill()])
+    # if os.environ.get("GOOGLE_API_KEY", "") and os.environ.get("SEARCH_ENGINE_ID", ""):
+    #     template_content['skills'].extend([search_google_skill()])
+    # if os.environ.get("TAVILY_API_KEY", ""):
+    #     template_content['skills'].extend([tavily_search_skill(), search_image_skill()])
+    if os.environ.get("GENSEE_API_KEY", ""):
+        template_content['skills'].extend([gensee_search_skill()])

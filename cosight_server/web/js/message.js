@@ -47,25 +47,29 @@ class MessageService {
             }
 
             // 处理 lui-message-tool-event 类型的消息
-            if (messageData.data && messageData.data.type === 'lui-message-tool-event') {
+            // 支持 contentType 和 type 两种字段名以保持兼容性
+            const messageType = messageData.data?.contentType || messageData.data?.type;
+            
+            if (messageType === 'lui-message-tool-event') {
                 console.log('收到 lui-message-tool-event 消息:', messageData);
                 this.handleToolEvent(messageData);
                 return;
             }
 
             // 处理 lui-message-credibility-analysis 类型的消息
-            if (messageData.data && messageData.data.type === 'lui-message-credibility-analysis') {
+            if (messageType === 'lui-message-credibility-analysis') {
                 console.log('收到 lui-message-credibility-analysis 消息:', messageData);
                 credibilityService.credibilityMessageHandler(messageData);
                 return;
             }
 
             // 检查是否是 lui-message-manus-step 类型的消息
-            if (messageData.data && messageData.data.type === 'lui-message-manus-step') {
+            if (messageType === 'lui-message-manus-step') {
                 console.log('收到 lui-message-manus-step 消息，开始创建DAG图');
+                console.log('完整消息数据:', messageData);
                 this.stepMessageHandler(messageData);
             } else {
-                console.log('收到其他类型的消息:', messageData.data?.type || 'unknown');
+                console.log('收到其他类型的消息:', messageType || 'unknown');
             }
         } catch (error) {
             console.error('处理消息时发生错误:', error);
@@ -89,16 +93,22 @@ class MessageService {
             console.warn('保存本地状态失败:', e);
         }
 
+        // 获取initData，支持多种格式
+        const initData = messageData.data?.content || messageData.data?.initData;
+        
         // 显示标题信息
-        updateDynamicTitle(messageData.data.initData.title);
-        showStepsTooltip();
-        setTimeout(() => {
-            hideStepsTooltip();
-        }, 3000);
+        if (initData && initData.title) {
+            updateDynamicTitle(initData.title);
+            showStepsTooltip();
+            setTimeout(() => {
+                hideStepsTooltip();
+            }, 3000);
+        }
+        
         // 在接收到步骤状态更新后，自动关闭已完成且无运行中工具的步骤面板
         try {
-            if (messageData?.data?.initData) {
-                this._autoCloseCompletedStepPanels(messageData.data.initData);
+            if (initData) {
+                this._autoCloseCompletedStepPanels(initData);
             }
         } catch (e) {
             console.warn('自动关闭完成步骤面板时发生异常:', e);
@@ -131,13 +141,27 @@ class MessageService {
      * 处理tool event消息
      */
     handleToolEvent(messageData) {
-        // 兼容两种数据格式：直接在initData中，或者在initData.plan中
-        const toolEventData = messageData.data.initData.plan || messageData.data.initData;
+        // 兼容多种数据格式：
+        // 1. messageData.data.content (标准格式，contentType字段)
+        // 2. messageData.data.initData.plan (旧格式)
+        // 3. messageData.data.initData (旧格式)
+        const toolEventData = messageData.data?.content || messageData.data?.initData?.plan || messageData.data?.initData;
+        
+        if (!toolEventData) {
+            console.warn('无法获取tool event数据:', messageData);
+            return;
+        }
+        
         const stepIndex = toolEventData.step_index;
         const eventType = toolEventData.event_type;
         
         console.log(`处理tool event: ${eventType}, step: ${stepIndex}, tool: ${toolEventData.tool_name}`);
         console.log('完整的toolEventData:', toolEventData);
+        
+        // 特殊处理 mark_step 工具事件，更新节点的 step_notes
+        if (toolEventData.tool_name === 'mark_step' && eventType === 'tool_complete') {
+            this.handleMarkStepEvent(toolEventData);
+        }
 
         // 确保stepIndex对应的数组存在
         if (!this.stepToolEvents.has(stepIndex)) {
@@ -243,6 +267,45 @@ class MessageService {
 
         // 持久化最新的step tool events
         this.persistStepToolEvents();
+    }
+
+    /**
+     * 处理 mark_step 工具事件，更新节点的 step_notes
+     */
+    handleMarkStepEvent(toolEventData) {
+        try {
+            const stepIndex = toolEventData.step_index;
+            const nodeId = stepIndex + 1; // stepIndex从0开始，DAG节点ID从1开始
+            
+            // 从tool_args中提取step_notes
+            let stepNotes = '';
+            if (toolEventData.tool_args) {
+                try {
+                    const args = JSON.parse(toolEventData.tool_args);
+                    stepNotes = args.step_notes || '';
+                } catch (e) {
+                    console.warn('解析mark_step工具参数失败:', e);
+                    return;
+                }
+            }
+            
+            console.log(`handleMarkStepEvent: stepIndex=${stepIndex}, nodeId=${nodeId}, step_notes=`, stepNotes);
+            
+            // 更新dagData中对应节点的step_notes
+            if (typeof dagData !== 'undefined' && dagData.nodes) {
+                const node = dagData.nodes.find(n => n.id === nodeId);
+                if (node) {
+                    node.step_notes = stepNotes;
+                    console.log(`已更新节点 ${nodeId} 的 step_notes:`, stepNotes);
+                } else {
+                    console.warn(`未找到节点 ID ${nodeId}`);
+                }
+            } else {
+                console.warn('dagData 未定义或没有 nodes 数组');
+            }
+        } catch (error) {
+            console.error('处理mark_step事件时发生错误:', error);
+        }
     }
 
     /**
@@ -571,20 +634,31 @@ class MessageService {
 
     /**
      * 发送回放请求
-     * - 从 localStorage 读取 planId 与 workspace
-     *   - planId: 从 cosight:planIdByTopic 中取当前最近一个未完成或最近记录的 planId；若无，则提示
-     *   - workspace: 从 cosight:lastManusStep 中的 initData.step_files 的任意项的 path 中解析工作空间名
+     * @param {string} workspacePath - 工作区路径，如 'work_space/work_space_20251010_161223_071211'
+     * @param {string} replayPlanId - 可选的planId
      */
-    sendReplay() {
+    sendReplay(workspacePath, replayPlanId) {
         try {
+            console.log('sendReplay 被调用，参数:', { workspacePath, replayPlanId });
+            
             // 解析 workspace
             let replayWorkspace = null;
+            
+            // 1) 优先使用传入的参数
+            if (workspacePath && typeof workspacePath === 'string' && workspacePath.trim().length > 0) {
+                replayWorkspace = workspacePath.trim();
+                console.log('使用传入的工作区路径:', replayWorkspace);
+            }
+            
+            // 2) 回退逻辑
             try {
-                // 1) 优先从 cosight:workspace 读取
-                // const wsRaw = localStorage.getItem('cosight:workspace');
-                const wsRaw ='work_space_20250926_202755_412701';
-                if (wsRaw && typeof wsRaw === 'string' && wsRaw.trim().length > 0) {
-                    replayWorkspace = wsRaw.trim();
+                if (!replayWorkspace) {
+                    // 尝试从 localStorage 读取
+                    const wsRaw = localStorage.getItem('cosight:workspace');
+                    if (wsRaw && typeof wsRaw === 'string' && wsRaw.trim().length > 0) {
+                        replayWorkspace = wsRaw.trim();
+                        console.log('从 localStorage 获取工作区路径:', replayWorkspace);
+                    }
                 }
                 // 2) 回退到从 lastManusStep 推断
                 if (!replayWorkspace) {
@@ -614,33 +688,41 @@ class MessageService {
                 console.warn('解析workspace失败:', e);
             }
 
-            // 解析 planId（从 cosight:planIdByTopic 选择最新一个记录）
-            let replayPlanId = null;
-            try {
-                // const planRaw = localStorage.getItem('cosight:replayid');
-                const planRaw = '123';
-                if (planRaw) {
-                    replayPlanId = planRaw
-                    // const map = JSON.parse(planRaw);
-                    // const entries = Object.entries(map);
-                    // if (entries.length > 0) {
-                    //     // 选择 savedAt 最大或任意最后一个；这里按 Object 顺序取最后一个
-                    //     const last = entries[entries.length - 1][1];
-                    //     if (last && last.planId) replayPlanId = last.planId;
-                    // }
+            // 解析 planId
+            // 1) 优先使用传入的参数
+            if (!replayPlanId || typeof replayPlanId !== 'string' || replayPlanId.trim().length === 0) {
+                // 2) 尝试从 localStorage 获取
+                try {
+                    const planRaw = localStorage.getItem('cosight:planIdByTopic');
+                    if (planRaw) {
+                        const map = JSON.parse(planRaw);
+                        const entries = Object.entries(map);
+                        if (entries.length > 0) {
+                            // 取最后一个
+                            replayPlanId = entries[entries.length - 1][1];
+                            console.log('从 localStorage 获取 planId:', replayPlanId);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('解析planId失败:', e);
                 }
-            } catch (e) {
-                console.warn('解析planId失败:', e);
+            } else {
+                console.log('使用传入的 planId:', replayPlanId);
             }
 
+            // planId 是可选的，不强制要求
             if (!replayPlanId) {
-                alert('未找到可用的 planId，无法回放');
-                return;
+                console.log('未找到 planId，将生成新的');
+                replayPlanId = WebSocketService.generateUUID();
             }
+            
             if (!replayWorkspace) {
                 alert('未找到可用的 workspace，无法回放');
+                console.error('replayWorkspace 为空');
                 return;
             }
+            
+            console.log('最终使用的回放参数:', { replayWorkspace, replayPlanId });
 
             // 生成新的 topic 用于订阅这次回放
             const topic = WebSocketService.generateUUID();

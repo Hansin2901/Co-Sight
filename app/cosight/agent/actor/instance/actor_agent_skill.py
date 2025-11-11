@@ -107,6 +107,35 @@ def tavily_search_skill():
     }
 
 
+def gensee_search_skill():
+    return {
+        'skill_name': 'gensee_search',
+        'skill_type': "function",
+        'display_name_zh': 'Gensee搜索',
+        'display_name_en': 'Gensee Search',
+        'description_zh': '使用Gensee搜索引擎搜索给定查询的信息',
+        'description_en': 'Use Gensee search engine to search information for the given query',
+        'semantic_apis': ["api_search"],
+        'function': SkillFunction(
+            id='4c44f9ad-be5c-4e6c-a9d8-1426b23828a1',
+            name='app.cosight.search_toolkit.gensee_search',
+            description_zh='通过Gensee搜索引擎获取查询结果',
+            description_en='Get search results using Gensee search engine',
+            parameters={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description_zh": "要搜索的查询内容",
+                        "description_en": "Query to be searched"
+                    }
+                },
+                "required": ["query"]
+            }
+        )
+    }
+
+
 def search_duckgo_skill():
     return {
         'skill_name': 'search_duckgo',
@@ -716,6 +745,64 @@ def create_html_report_skill():
                 "type": "object",
                 "properties": {},
                 "required": []
+            }
+        )
+    }
+
+
+def fetch_website_content_with_images_skill():
+    return {
+        'skill_name': 'fetch_website_content_with_images',
+        'skill_type': "function",
+        'display_name_zh': '网页内容爬取（含图片）',
+        'display_name_en': 'Fetch Website Content with Images',
+        'description_zh': '获取网页内容并提取所有图片信息，包括img标签和CSS背景图片',
+        'description_en': 'Fetch website content and extract all image information including img tags and CSS background images',
+        'semantic_apis': ["api_browser_simulation"],
+        'function': SkillFunction(
+            id='3c44f9ad-be5c-4e6c-a9d8-1426b23828a2',
+            name='app.cosight.tool.scrape_website_toolkit.fetch_website_content_with_images',
+            description_zh='获取网页内容并提取图片信息，返回文本内容和图片详细信息',
+            description_en='Fetch website content and extract image information, return text content and detailed image info',
+            parameters={
+                "type": "object",
+                "properties": {
+                    "website_url": {
+                        "type": "string",
+                        "description_zh": "要抓取的网页URL",
+                        "description_en": "Website URL to scrape"
+                    }
+                },
+                "required": ["website_url"]
+            }
+        )
+    }
+
+
+def fetch_website_images_only_skill():
+    return {
+        'skill_name': 'fetch_website_images_only',
+        'skill_type': "function",
+        'display_name_zh': '网页图片提取',
+        'display_name_en': 'Fetch Website Images Only',
+        'description_zh': '仅提取网页中的图片信息，不返回文本内容',
+        'description_en': 'Extract only image information from website without text content',
+        'semantic_apis': ["api_browser_simulation"],
+        'function': SkillFunction(
+            id='4c44f9ad-be5c-4e6c-a9d8-1426b23828a3',
+            name='app.cosight.tool.scrape_website_toolkit.fetch_website_images_only',
+            description_zh='仅提取网页图片信息，包括img标签和CSS背景图片',
+            description_en='Extract only website image information including img tags and CSS background images',
+            parameters={
+                "type": "object",
+                "properties": {
+                    "website_url": {
+                        "type": "string",
+                        "description_zh": "要抓取的网页URL",
+                        "description_en": "Website URL to scrape"
+                    }
+                },
+                "required": ["website_url"]
             }
         )
     }

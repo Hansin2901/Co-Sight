@@ -16,6 +16,8 @@ from datetime import datetime
 from app.cosight.agent.actor.instance.actor_agent_instance import create_actor_instance
 from llm import llm_for_plan, llm_for_act, llm_for_tool, llm_for_vision
 from app.cosight.task.plan_report_manager import plan_report_event_manager
+from app.cosight.llm.langfuse_config import is_langfuse_enabled
+from langfuse import get_client, observe
 
 
 import os
@@ -44,7 +46,41 @@ class CoSight:
         self.vision_llm = vision_llm
 
     @time_record
+    @observe(name="research_task")
     def execute(self, question, output_format=""):
+        """Execute a research task - each task is tracked as one LangFuse session"""
+        
+        # Initialize LangFuse session for this research task
+        if is_langfuse_enabled():
+            try:
+                # Set session ID and metadata for the entire research task
+                get_client().update_current_trace(
+                    session_id=self.plan.session_id,
+                    name=f"Research: {question[:60]}..." if len(question) > 60 else f"Research: {question}",
+                    metadata={
+                        "question": question,
+                        "output_format": output_format,
+                        "plan_id": self.plan_id,
+                        "task_type": "research"
+                    },
+                    tags=["research-task", "session-start"]
+                )
+                logger.info(f"[LangFuse] 📊 Session started: {self.plan.session_id}")
+                
+                # Set session_id on all LLM instances so they can propagate it
+                if hasattr(self.act_llm, 'session_id'):
+                    self.act_llm.session_id = self.plan.session_id
+                if hasattr(self.tool_llm, 'session_id'):
+                    self.tool_llm.session_id = self.plan.session_id
+                if hasattr(self, 'vision_llm') and hasattr(self.vision_llm, 'session_id'):
+                    self.vision_llm.session_id = self.plan.session_id
+                # Also set on the planner agent's LLM
+                if hasattr(self.task_planner_agent, 'llm') and hasattr(self.task_planner_agent.llm, 'session_id'):
+                    self.task_planner_agent.llm.session_id = self.plan.session_id
+                    
+            except Exception as e:
+                logger.debug(f"[LangFuse] Failed to set session: {e}")
+        
         create_task = question
         retry_count = 0
         while not self.plan.get_ready_steps() and retry_count < 3:
