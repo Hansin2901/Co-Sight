@@ -503,7 +503,7 @@ class ToolResultProcessor:
         """
         try:
             # 根据工具名称精确匹配选择处理方式
-            if tool_name in ['search_baidu', 'search_google', 'search_wiki', 'tavily_search', 'image_search']:
+            if tool_name in ['search_baidu', 'search_google', 'search_wiki', 'tavily_search', 'gensee_search', 'image_search']:
                 return ToolResultProcessor._process_search_result(tool_name, tool_args, tool_result, task_title)
             elif tool_name == 'execute_code':
                 return ToolResultProcessor._process_code_result(tool_name, tool_args, tool_result, task_title)
