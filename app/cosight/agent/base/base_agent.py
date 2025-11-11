@@ -31,6 +31,17 @@ from app.cosight.task.plan_report_manager import plan_report_event_manager
 from app.common.logger_util import logger
 from app.cosight.agent.base.tool_arg_mapping import FUNCTION_ARG_MAPPING
 
+# LangFuse integration imports
+from app.cosight.llm.langfuse_config import is_langfuse_enabled, observe_fallback
+try:
+    from langfuse import observe, get_client
+    LANGFUSE_AVAILABLE = True
+except ImportError:
+    LANGFUSE_AVAILABLE = False
+    observe = observe_fallback
+    get_client = lambda: None
+    logger.debug("[LangFuse] Package not available for tool tracing")
+
 
 class BaseAgent:
     def __init__(self, agent_instance: AgentInstance, llm: ChatLLM, functions: {}, plan_id: str = None):
@@ -447,8 +458,25 @@ class BaseAgent:
         return messages[-1].get("content")
 
     @time_record
+    @observe(name="tool_execution")
     def _execute_tool_call(self, function_name="", function_args="", tool_call_id="", step_index=None):
         start_time = time.time()
+        
+        # Add metadata to LangFuse trace if available
+        if is_langfuse_enabled() and LANGFUSE_AVAILABLE:
+            try:
+                langfuse_client = get_client()
+                langfuse_client.update_current_span(
+                    name=f"tool_{function_name}",
+                    metadata={
+                        "tool_name": function_name,
+                        "step_index": step_index,
+                        "tool_call_id": tool_call_id
+                    },
+                    input={"args": function_args[:500] if function_args else ""}  # Truncate long args
+                )
+            except Exception as e:
+                logger.debug(f"[LangFuse] Failed to update tool observation: {e}")
         
         # 推送工具开始执行事件
         self._push_tool_event("tool_start", function_name, function_args, step_index=step_index)
@@ -519,6 +547,22 @@ class BaseAgent:
             self._push_tool_event("tool_complete", function_name, function_args, 
                                 str(result), step_index, duration)
 
+            # Update LangFuse trace with result
+            if is_langfuse_enabled() and LANGFUSE_AVAILABLE:
+                try:
+                    result_str = str(result)
+                    langfuse_client = get_client()
+                    langfuse_client.update_current_span(
+                        output={"result": result_str[:1000]},  # Truncate long results
+                        metadata={
+                            "duration": duration,
+                            "success": True,
+                            "result_length": len(result_str)
+                        }
+                    )
+                except Exception as e:
+                    logger.debug(f"[LangFuse] Failed to update tool result: {e}")
+
             # 记录工具调用信息到Plan对象（如果有plan引用且step_index有效）
             if self.plan and step_index is not None and hasattr(self.plan, 'add_tool_call'):
                 try:
@@ -549,8 +593,25 @@ class BaseAgent:
             }
 
     @time_record
+    @observe(name="mcp_tool_execution")
     def _execute_mcp_tool_call(self, function_name="", function_args="", tool_call_id=""):
         start_time = time.time()
+        
+        # Add metadata to LangFuse trace if available
+        if is_langfuse_enabled() and LANGFUSE_AVAILABLE:
+            try:
+                langfuse_client = get_client()
+                langfuse_client.update_current_span(
+                    name=f"mcp_tool_{function_name}",
+                    metadata={
+                        "tool_name": function_name,
+                        "tool_type": "mcp",
+                        "tool_call_id": tool_call_id
+                    },
+                    input={"args": function_args[:500] if function_args else ""}
+                )
+            except Exception as e:
+                logger.debug(f"[LangFuse] Failed to update MCP tool observation: {e}")
         
         # 推送MCP工具开始执行事件
         self._push_tool_event("tool_start", function_name, function_args, step_index=-1)
