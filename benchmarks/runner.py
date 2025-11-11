@@ -15,9 +15,15 @@ from pathlib import Path
 # Add parent directory to path to import CoSight
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+# Initialize LangFuse Observability (must be done before importing CoSight)
+from app.common.logger_util import logger
+logger.info("\n=== LangFuse Observability Setup ===")
+from app.cosight.llm.langfuse_config import initialize_langfuse, shutdown_langfuse
+initialize_langfuse()
+logger.info("=== LangFuse Setup Complete ===\n")
+
 from CoSight import CoSight
 from llm import llm_for_plan, llm_for_act, llm_for_tool, llm_for_vision
-from app.common.logger_util import logger
 from formatters.deepresearch_formatter import format_deepresearch_output
 
 
@@ -136,6 +142,9 @@ def run_benchmark(input_csv, output_file, start_idx=0, end_idx=None, resume=Fals
     logger.info(f"\n{'='*80}")
     logger.info(f"Benchmark completed! Results saved to: {output_file}")
     logger.info(f"{'='*80}\n")
+
+    # Flush LangFuse traces before exit
+    shutdown_langfuse()
 
 
 def main():
