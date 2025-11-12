@@ -24,9 +24,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from pathlib import Path
 from app.manus.manus import Manus
-from app.cosight.task.task_manager import TaskManager
+from app.manus.task.task_manager import TaskManager
 from llm import llm_for_plan, llm_for_act, llm_for_tool, llm_for_vision
-from app.common.logger_util import logger
+from app.common.infrastructure.utils.log import logger
 import json
 import ast
 

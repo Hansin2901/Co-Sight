@@ -17,17 +17,19 @@ import os
 import sys
 import traceback
 
-from browser_use import Agent
-from browser_use.agent.views import AgentHistoryList
-from browser_use.browser.browser import Browser, BrowserConfig
-from browser_use.browser.context import BrowserContext, BrowserContextConfig
+# Temporarily commented out for citation tracking test
+# from browser_use import Agent
+# from browser_use.agent.views import AgentHistoryList
+# from browser_use.browser.browser import Browser, BrowserConfig
+# from browser_use.browser.context import BrowserContext, BrowserContextConfig
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
+# from langchain_openai import ChatOpenAI
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 import asyncio
-from aworld.logs.util import logger
-from browser_use.agent.memory import MemoryConfig
+# from aworld.logs.util import logger
+from app.common.infrastructure.utils.log import logger  # Use existing logger
+# from browser_use.agent.memory import MemoryConfig
 
 browser_system_prompt = """
 ===== NAVIGATION STRATEGY =====

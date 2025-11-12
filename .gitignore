@@ -17,4 +17,6 @@ logs/
 __pycache__
 **/work_space/**
 **/workspace/**
-google_api_key*.jsontest_output.log
+google_api_key*.json
+test_output.log
+test_run.log
