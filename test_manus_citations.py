@@ -175,7 +175,7 @@ def main():
     logger.info("VERDICT")
     logger.info("="*80)
 
-    if total_urls > 0:
+    if len(total_urls) > 0:
         logger.info("✅ SUCCESS: Citation tracking is working!")
         logger.info(f"   Found {len(total_urls)} citations that can be used for ReportBench")
     else:
