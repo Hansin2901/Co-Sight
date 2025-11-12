@@ -34,8 +34,8 @@ async def fetch_url_content(url: str) -> str:
             'Accept-Language': 'en-US,en;q=0.5',
             'Connection': 'keep-alive'
         }
-        
-        proxy = "http://proxyhk.zte.com.cn:80"
+
+        proxy = None  # Disabled - proxy unreachable
         timeout = aiohttp.ClientTimeout(total=10)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url, headers=headers, proxy=proxy) as response:
@@ -85,7 +85,7 @@ def search_google(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            proxy = "http://proxyhk.zte.com.cn:80"
+            proxy = None  # Disabled - proxy unreachable
             links = list(search(query, num_results=max_results, proxy=proxy, advanced=True))
             
             # Create a new event loop for the current thread

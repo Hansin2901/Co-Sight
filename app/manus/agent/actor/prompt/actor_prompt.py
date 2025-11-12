@@ -97,8 +97,8 @@ Current Step Description: {plan.steps[step_index]}
     Files in Workspace:
     {files_list}
 - Encoding: UTF-8 (must be used for all file operations and python code read/write)
-- Language: Chinese
-- 网络代理：{os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY")}
+- Language: English
+- Network Proxy: {os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY")}
 
 Execute the current step:
 """

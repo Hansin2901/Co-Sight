@@ -71,7 +71,7 @@ steps: ["Requirements gathering", "System design", "Database design", "Frontend 
 dependencies: {1: [0], 2: [0], 3: [1], 4: [1], 5: [3, 4], 6: [5]}
 
 # Environment Information
-- Language: Chinese
+- Language: English
 """
     return system_prompt
 

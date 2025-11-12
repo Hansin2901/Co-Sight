@@ -37,8 +37,8 @@ async def fetch_url_content(url: str) -> str:
             'Accept-Language': 'en-US,en;q=0.5',
             'Connection': 'keep-alive'
         }
-        
-        proxy = "http://proxyhk.zte.com.cn:80"
+
+        proxy = None  # Disabled - proxy unreachable
         timeout = aiohttp.ClientTimeout(total=10)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url, headers=headers, proxy=proxy) as response:
