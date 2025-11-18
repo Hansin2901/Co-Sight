@@ -18,6 +18,7 @@ from openai import OpenAI
 from app.common.logger_util import logger
 from app.cosight.llm.chat_llm import ChatLLM
 from config.config import *
+from app.cosight.llm.langfuse_config import initialize_langfuse
 
 
 def set_model(model_config: dict[str, Optional[str | int | float]]):
@@ -73,3 +74,8 @@ llm_for_vision = set_model(vision_model_config)
 credibility_model_config = get_credibility_model_config()
 logger.info(f"credibility_model_config:{credibility_model_config}\n")
 llm_for_credibility = set_model(credibility_model_config)
+
+# Initialize Langfuse tracing at startup
+logger.info("[LangFuse] Initializing Langfuse observability...")
+initialize_langfuse()
+logger.info("[LangFuse] Langfuse initialization complete")

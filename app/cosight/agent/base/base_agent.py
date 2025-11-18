@@ -30,6 +30,7 @@ from app.cosight.tool.tool_result_processor import ToolResultProcessor
 from app.cosight.task.plan_report_manager import plan_report_event_manager
 from app.common.logger_util import logger
 from app.cosight.agent.base.tool_arg_mapping import FUNCTION_ARG_MAPPING
+from app.cosight.llm.langfuse_config import observe
 
 
 class BaseAgent:
@@ -362,6 +363,7 @@ class BaseAgent:
         # 未在清单中的工具：不返回任何步骤
         return []
 
+    @observe(name="agent_execute")
     def execute(self, messages: List[Dict[str, Any]], step_index=None, max_iteration=10):  #调试修改的10
         for i in range(max_iteration):
             logger.info(f'act agent call with tools message: {messages}')
@@ -446,10 +448,11 @@ class BaseAgent:
 
         return messages[-1].get("content")
 
+    @observe(name="tool_execution")
     @time_record
     def _execute_tool_call(self, function_name="", function_args="", tool_call_id="", step_index=None):
         start_time = time.time()
-        
+
         # 推送工具开始执行事件
         self._push_tool_event("tool_start", function_name, function_args, step_index=step_index)
         

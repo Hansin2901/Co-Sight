@@ -41,6 +41,7 @@ from app.cosight.tool.video_analysis_toolkit import VideoTool
 from app.cosight.tool.html_visualization_toolkit import HtmlVisualizationToolkit
 from config.config import get_tavily_config
 from app.common.logger_util import logger
+from app.cosight.llm.langfuse_config import observe
 
 
 class TaskActorAgent(BaseAgent):
@@ -138,6 +139,7 @@ class TaskActorAgent(BaseAgent):
             sys_prompt = actor_system_prompt(self.work_space_path)
         self.history.append({"role": "system", "content": sys_prompt})
 
+    @observe(name="actor_act")
     @time_record
     def act(self, question, step_index):
         self.question = question  # Store the question for use in tools

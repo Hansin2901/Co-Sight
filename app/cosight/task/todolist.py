@@ -48,6 +48,10 @@ class Plan:
         self.result = ""
         self.work_space_path = work_space_path if work_space_path else os.environ.get("WORKSPACE_PATH") or os.getcwd()
 
+        # NEW: Add session_id for tracing
+        # Each Plan instance gets a unique session ID for unified trace tracking
+        self.session_id = f"cosight-task-{id(self)}"
+
     def set_plan_result(self, plan_result):
         self.result = plan_result
 

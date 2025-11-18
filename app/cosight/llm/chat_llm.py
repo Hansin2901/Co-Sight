@@ -24,19 +24,45 @@ from openai.types.chat import ChatCompletion
 from app.agent_dispatcher.infrastructure.entity.exception.ZaeFrameworkException import ZaeFrameworkException
 from app.cosight.task.time_record_util import time_record
 from app.common.logger_util import logger
+from app.cosight.llm.langfuse_config import is_langfuse_enabled, observe, get_langfuse_client
+
+# Add imports for Langfuse OpenAI wrapper
+try:
+    from langfuse.openai import openai as langfuse_openai
+    LANGFUSE_OPENAI_AVAILABLE = True
+except ImportError:
+    LANGFUSE_OPENAI_AVAILABLE = False
 
 
 class ChatLLM:
     def __init__(self, base_url: str, api_key: str, model: str, client: OpenAI, max_tokens: int = 4096,
                  temperature: float = 0.0, stream: bool = False, tools: List[Any] = None):
         self.tools = tools or []
-        self.client = client
         self.base_url = base_url
         self.api_key = api_key
         self.model = model
         self.stream = stream
         self.temperature = temperature
         self.max_tokens = max_tokens
+
+        # NEW: Add session_id for tracing
+        self.session_id = None
+
+        # NEW: Wrap OpenAI client with Langfuse instrumentation
+        if is_langfuse_enabled() and LANGFUSE_OPENAI_AVAILABLE:
+            try:
+                # Wrap the client for automatic LLM call tracking
+                self.client = langfuse_openai.OpenAI(
+                    base_url=base_url,
+                    api_key=api_key,
+                    http_client=client._client if hasattr(client, '_client') else None
+                )
+                logger.info("[LangFuse] ✅ ChatLLM using instrumented OpenAI client")
+            except Exception as e:
+                logger.warning(f"[LangFuse] ⚠️  Failed to wrap OpenAI client: {e}")
+                self.client = client
+        else:
+            self.client = client
 
     @staticmethod
     def clean_none_values(data):
@@ -53,11 +79,34 @@ class ChatLLM:
         else:
             return data
 
+    @observe(name="llm_create_with_tools")
     @time_record
     def create_with_tools(self, messages: List[Dict[str, Any]], tools: List[Dict]):
         """
         Create a chat completion with support for function/tool calls
         """
+        # NEW: Update trace with session_id and metadata
+        if is_langfuse_enabled():
+            try:
+                trace_params = {
+                    "metadata": {
+                        "model": self.model,
+                        "temperature": self.temperature,
+                        "tools_count": len(tools),
+                        "base_url": self.base_url
+                    }
+                }
+
+                # CRITICAL: Add session_id at trace level
+                if self.session_id:
+                    trace_params["session_id"] = self.session_id
+
+                client = get_langfuse_client()
+                if client:
+                    client.update_current_trace(**trace_params)
+            except Exception as e:
+                logger.warning(f"[LangFuse] Failed to update trace: {e}")
+
         # 清洗提示词，去除None
         messages = ChatLLM.clean_none_values(messages)
         max_retries = 5
@@ -153,8 +202,31 @@ class ChatLLM:
                             logger.warning("Using empty JSON object as fallback for tool call arguments")
                             break
 
+    @observe(name="llm_chat_to_llm")
     @time_record
     def chat_to_llm(self, messages: List[Dict[str, Any]]):
+        # NEW: Update trace with session_id and metadata
+        if is_langfuse_enabled():
+            try:
+                trace_params = {
+                    "metadata": {
+                        "model": self.model,
+                        "temperature": self.temperature,
+                        "max_tokens": self.max_tokens,
+                        "base_url": self.base_url
+                    }
+                }
+
+                # CRITICAL: Add session_id at trace level
+                if self.session_id:
+                    trace_params["session_id"] = self.session_id
+
+                client = get_langfuse_client()
+                if client:
+                    client.update_current_trace(**trace_params)
+            except Exception as e:
+                logger.warning(f"[LangFuse] Failed to update trace: {e}")
+
         # 清洗提示词，去除None
         messages = ChatLLM.clean_none_values(messages)
         response = self.client.chat.completions.create(
