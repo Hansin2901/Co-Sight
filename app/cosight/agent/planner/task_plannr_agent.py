@@ -25,6 +25,9 @@ from app.cosight.task.task_manager import TaskManager
 from app.cosight.tool.plan_toolkit import PlanToolkit
 from app.cosight.tool.terminate_toolkit import TerminateToolkit
 
+# NEW: Langfuse tracing import
+from app.manus.llm.langfuse_config import observe
+
 
 class TaskPlannerAgent(BaseAgent):
     def __init__(self, agent_instance: AgentInstance, llm: ChatLLM, plan_id, functions: Dict = None):
@@ -37,18 +40,24 @@ class TaskPlannerAgent(BaseAgent):
             all_functions = functions.update(functions)
         super().__init__(agent_instance, llm, all_functions)
 
+    # NEW: Add observe decorator
+    @observe(name="planner_create_plan")
     def create_plan(self, question, output_format=""):
         self.history.append({"role": "system", "content": planner_system_prompt(question)})
         self.history.append({"role": "user", "content": planner_create_plan_prompt(question, output_format)})
         result = self.execute(self.history, max_iteration=1)
         return result
 
+    # NEW: Add observe decorator
+    @observe(name="planner_re_plan")
     def re_plan(self, question, output_format=""):
         self.history.append(
             {"role": "user", "content": planner_re_plan_prompt(question, self.plan.format(), output_format)})
         result = self.execute(self.history, max_iteration=1)
         return result
 
+    # NEW: Add observe decorator
+    @observe(name="planner_finalize")
     def finalize_plan(self, question, output_format=""):
         self.history.append(
             {"role": "user", "content": planner_finalize_plan_prompt(question, self.plan.format(), output_format)})
