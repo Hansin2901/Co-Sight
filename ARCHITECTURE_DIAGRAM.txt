@@ -1,0 +1,236 @@
+╔════════════════════════════════════════════════════════════════════════════════════════╗
+║                      MANUS AGENT ARCHITECTURE OVERVIEW                                 ║
+╚════════════════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│ USER INPUT / QUESTION                                                                   │
+└──────────────────────────────┬──────────────────────────────────────────────────────────┘
+                               │
+                               ▼
+        ┌──────────────────────────────────────────┐
+        │         Manus Orchestrator               │
+        │      (manus.py - 188 lines)              │
+        │  ┌──────────────────────────────────┐   │
+        │  │ __init__():                      │   │
+        │  │ - plan_llm, act_llm              │   │
+        │  │ - tool_llm, vision_llm           │   │
+        │  │ - TaskPlannerAgent instance      │   │
+        │  │ - Plan storage (plan_id)         │   │
+        │  └──────────────────────────────────┘   │
+        └────────────────┬─────────────────────────┘
+                         │
+         ┌───────────────┴───────────────┐
+         │                               │
+         ▼                               ▼
+    ┌──────────────────────┐    ┌──────────────────────────┐
+    │ PLANNING PHASE       │    │ EXECUTION PHASE          │
+    │ (TaskPlannerAgent)   │    │ (TaskActorAgent)         │
+    │                      │    │                          │
+    │ ┌─────────────────┐  │    │ ┌────────────────────┐   │
+    │ │ 1.create_fact() │  │    │ │ act() per step:    │   │
+    │ │ Extract facts   │  │    │ │                    │   │
+    │ └─────────────────┘  │    │ │ - Set in_progress  │   │
+    │           │          │    │ │ - Call BaseAgent   │   │
+    │ ┌─────────────────┐  │    │ │   .execute()       │   │
+    │ │ 2.create_plan() │  │    │ │ - Mark complete    │   │
+    │ │ Skills:         │  │    │ │ - Update facts     │   │
+    │ │ • create_plan   │  │    │ │ - Publish event    │   │
+    │ │ • update_plan   │  │    │ │                    │   │
+    │ └─────────────────┘  │    │ └────────────────────┘   │
+    │           │          │    │           │              │
+    │ ┌─────────────────┐  │    │           ▼              │
+    │ │ 3.re_plan()     │  │    │ ┌────────────────────┐   │
+    │ │ Adjust based on │  │    │ │ BaseAgent.execute()│   │
+    │ │ progress        │  │    │ │ (242 lines)        │   │
+    │ └─────────────────┘  │    │ │                    │   │
+    │           │          │    │ │ Loop (max 20):     │   │
+    │ ┌─────────────────┐  │    │ │ • LLM w/ tools     │   │
+    │ │ 4.finalize()    │  │    │ │ • Process response │   │
+    │ │ Extract answer  │  │    │ │ • Execute tools    │   │
+    │ │ via regex       │  │    │ │ • Record in plan   │   │
+    │ └─────────────────┘  │    │ │ • Check termination│   │
+    └──────────────────────┘    │ └────────────────────┘   │
+         │                       └──────────────────────────┘
+         │                               │
+         └───────────────┬───────────────┘
+                         │
+         ┌───────────────┴──────────────────┐
+         │                                  │
+         ▼                                  ▼
+    ┌─────────────────────────┐     ┌─────────────────────────┐
+    │ PLAN DATA STRUCTURE     │     │ TOOL EXECUTION LAYER    │
+    │ (todolist.py)           │     │ (22 toolkits, 8,624 LOC)│
+    │                         │     │                         │
+    │ • Steps (DAG)           │     │ • Code Execution        │
+    │ • Dependencies          │     │ • Web Search/Scrape     │
+    │ • Step Status:          │     │ • File Operations       │
+    │   ✓ completed           │     │ • Image/Video Analysis  │
+    │   → in_progress         │     │ • Audio Processing      │
+    │   ! blocked             │     │ • Document Processing   │
+    │   [ ] not_started       │     │ • ArXiv Integration     │
+    │ • Tool History          │     │ • Browser Automation    │
+    │ • Facts                 │     │ • Deep Search           │
+    │ • Progress Tracking     │     │ • Excel/PowerPoint      │
+    │ • File References       │     │ • Plan/Act Toolkits     │
+    └─────────────────────────┘     └─────────────────────────┘
+         │                                  │
+         │                                  │
+         └───────────────┬──────────────────┘
+                         │
+         ┌───────────────┴────────────┐
+         │                            │
+         ▼                            ▼
+    ┌─────────────────┐         ┌──────────────────┐
+    │ FORMAT GATE     │         │ REPORTING SYSTEM │
+    │ (format_gate.py)│         │ (plan_report_    │
+    │                 │         │  manager.py)     │
+    │ • Type checking │         │                  │
+    │ • Conversion    │         │ Events:          │
+    │ • Validation    │         │ • plan_created   │
+    │ • Error messages│         │ • plan_process   │
+    └─────────────────┘         │ • plan_result    │
+                                │                  │
+                                │ ThreadPoolExecutor
+                                │ async callbacks  │
+                                └──────────────────┘
+                                          │
+                                          ▼
+                                ┌──────────────────┐
+                                │ FINAL RESULTS    │
+                                │                  │
+                                │ • Plan summary   │
+                                │ • Tool history   │
+                                │ • Final answer   │
+                                │ • Generated files│
+                                └──────────────────┘
+
+
+╔════════════════════════════════════════════════════════════════════════════════════════╗
+║                      EXECUTION PARALLELIZATION FLOW                                    ║
+╚════════════════════════════════════════════════════════════════════════════════════════╝
+
+Plan: [Step A, Step B, Step C]
+Dependencies: {B: [A], C: [A]}
+
+                    Plan Created
+                          │
+        ┌─────────────────┼─────────────────┐
+        │                                   │
+    Step A Ready                     Step B, C Wait for A
+        │                                   │
+        ▼                                   │
+  ┌──────────────┐                         │
+  │ Execute Step A                        │
+  │ (Actor 1)    │                        │
+  └──────────────┘                        │
+        │                                   │
+        ├─ Tool 1 (search)                 │
+        ├─ Tool 2 (analyze)                │
+        └─ mark_step(completed)            │
+                                            │
+        ┌───────────────────────────────────┘
+        │
+        ▼
+    Step A: COMPLETED
+        │
+        ├─────────────────┬─────────────────┐
+        │                 │                 │
+    Step B Ready      Step C Ready     Parallel Execution
+        │                 │             (max 5 concurrent)
+        ▼                 ▼
+  ┌──────────────┐  ┌──────────────┐
+  │ Execute Step B│  │ Execute Step C│
+  │ (Actor 2)    │  │ (Actor 3)    │
+  └──────────────┘  └──────────────┘
+        │                 │
+        └────────┬────────┘
+                 │
+                 ▼
+            Publish: plan_process event
+                 │
+        ┌────────┴────────┐
+        │                 │
+        ▼                 ▼
+   Re-plan             Continue
+   (if needed)         (if done)
+                            │
+                            ▼
+                      Finalize Plan
+                            │
+                            ▼
+                      Extract Answer
+                            │
+                            ▼
+                      Return Result
+
+
+╔════════════════════════════════════════════════════════════════════════════════════════╗
+║                    COSIGHT vs MANUS COMPARISON AT A GLANCE                             ║
+╚════════════════════════════════════════════════════════════════════════════════════════╝
+
+MANUS                                   │ COSIGHT
+─────────────────────────────────────────┼──────────────────────────────────
+Full Agent Implementation               │ Resource Directory Only
+  ├─ Planner Agent                      │   └─ simhei.ttf (font file)
+  ├─ Actor Agent                        │
+  ├─ Task Management                    │
+  ├─ Plan Data Structure                │
+  ├─ 22 Toolkits (8,600+ LOC)           │
+  ├─ Format Validation                  │
+  ├─ Event Reporting                    │
+  ├─ MCP Integration                    │
+  └─ Memory/Context Stubs               │
+                                        │
+650+ lines (core)                       │ ~0 lines (just a font)
+├─ BaseAgent: 242 lines                 │
+├─ Planner: 85 lines                    │
+├─ Actor: 135 lines                     │
+├─ Main: 188 lines                      │
+└─ Support: ~40 lines                   │
+                                        │
+18 Native Tools                         │ 0 agent tools
+  + MCP Tools (dynamic)                 │
+                                        │
+DAG-based Planning                      │ Not applicable
+Parallel Execution (up to 5)            │ Not applicable
+Tool History Recording                  │ Not applicable
+Multi-LLM Support                       │ Not applicable
+Re-planning Logic                       │ Not applicable
+                                        │
+Status: FULLY IMPLEMENTED               │ Status: PLACEHOLDER/RESOURCE
+
+
+╔════════════════════════════════════════════════════════════════════════════════════════╗
+║                     AGENT DISPATCHER INFRASTRUCTURE ROLE                               ║
+╚════════════════════════════════════════════════════════════════════════════════════════╝
+
+Agent Dispatcher is a FRAMEWORK LAYER that MANUS uses:
+
+    MANUS (Agent Implementation)
+          │
+          ├─ Uses AgentInstance from agent_dispatcher
+          ├─ Uses AgentTemplate from agent_dispatcher
+          ├─ Uses Skill definitions from agent_dispatcher
+          └─ Integrates MCP tools via agent_dispatcher
+                   │
+                   ▼
+    AGENT DISPATCHER (Infrastructure)
+          │
+          ├─ Domain Model
+          │  └─ Plan/Action/Skill/MCP
+          │     ├─ MCPEngine (tool invocation)
+          │     └─ Skill conversion
+          │
+          └─ Infrastructure
+             ├─ Entity Definitions
+             │  ├─ AgentInstance (template + config)
+             │  ├─ AgentTemplate (skills + metadata)
+             │  ├─ Skill (tool definition)
+             │  └─ SkillFunction (tool wrapper)
+             │
+             └─ Utilities
+                ├─ count_token
+                ├─ regex_util
+                ├─ time_util
+                └─ constants
+
