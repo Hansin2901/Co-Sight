@@ -22,6 +22,7 @@ from app.manus.agent.planner.prompt.planner_prompt import planner_system_prompt,
     planner_create_plan_prompt, planner_re_plan_prompt, planner_finalize_plan_prompt, \
     planner_init_facts_prompt
 from app.manus.llm.chat_llm import ChatLLM
+from app.manus.llm.langfuse_config import observe
 from app.manus.task.plan_report_manager import plan_report_event_manager
 from app.manus.task.task_manager import TaskManager
 from app.manus.tool.plan_toolkit import PlanToolkit
@@ -39,6 +40,7 @@ class TaskPlannerAgent(BaseAgent):
             all_functions = functions.update(functions)
         super().__init__(agent_instance, llm, all_functions)
 
+    @observe(name="planner_create_fact")
     def create_fact(self, question):
         self.history.append({"role": "system", "content": planner_system_prompt()})
         self.history.append({"role": "user", "content": planner_init_facts_prompt(question)})
@@ -47,6 +49,7 @@ class TaskPlannerAgent(BaseAgent):
         self.plan.update_facts(result)
         return result
 
+    @observe(name="planner_create_plan")
     def create_plan(self, question, output_format=""):
         # self.history.append({"role": "system", "content": planner_system_prompt()})
         self.history.append(
@@ -54,6 +57,7 @@ class TaskPlannerAgent(BaseAgent):
         result = self.execute(self.history, max_iteration=1)
         return result
 
+    @observe(name="planner_re_plan")
     def re_plan(self, question, output_format=""):
         self.history.append(
             {"role": "user", "content": planner_re_plan_prompt(question, self.plan.format(),self.plan.facts, output_format)})
@@ -61,6 +65,7 @@ class TaskPlannerAgent(BaseAgent):
         # print(f"result of replan is {result}")
         return result
 
+    @observe(name="planner_finalize")
     def finalize_plan(self, question, output_format=""):
         self.history.append(
             {"role": "user", "content": planner_finalize_plan_prompt(question, self.plan.format(), output_format)})

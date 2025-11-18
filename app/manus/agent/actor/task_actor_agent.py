@@ -21,6 +21,7 @@ from app.manus.agent.actor.prompt.actor_prompt import actor_system_prompt, actor
     update_facts_prompt
 from app.manus.agent.base.base_agent import BaseAgent
 from app.manus.llm.chat_llm import ChatLLM
+from app.manus.llm.langfuse_config import observe
 from app.manus.task.plan_report_manager import plan_report_event_manager
 from app.manus.task.task_manager import TaskManager
 from app.manus.task.time_record_util import time_record
@@ -113,6 +114,7 @@ class TaskActorAgent(BaseAgent):
         self.history.append({"role": "system", "content": actor_system_prompt()})
 
     @time_record
+    @observe(name="actor_act")
     def act(self, question, step_index):
         self.plan.mark_step(step_index, step_status="in_progress")
         plan_report_event_manager.publish("plan_process", self.plan)
@@ -139,6 +141,7 @@ class TaskActorAgent(BaseAgent):
         pass
         return result
 
+    @observe(name="actor_single_act")
     def single_act(self, question):
         execute_task_prompt = f"""
 Here are auxiliary information about the overall task, which may help you understand the intent of the current task: {question}

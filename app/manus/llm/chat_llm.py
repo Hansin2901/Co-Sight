@@ -17,19 +17,44 @@ from typing import List, Dict, Any
 from openai import OpenAI
 
 from app.manus.task.time_record_util import time_record
+from app.manus.llm.langfuse_config import is_langfuse_enabled, observe, get_langfuse_client
+
+# Conditional import for Langfuse OpenAI wrapper
+try:
+    from langfuse.openai import openai as langfuse_openai
+    LANGFUSE_OPENAI_AVAILABLE = True
+except ImportError:
+    LANGFUSE_OPENAI_AVAILABLE = False
 
 
 class ChatLLM:
     def __init__(self, base_url: str, api_key: str, model: str, client: OpenAI, max_tokens: int = 4096,
                  temperature: float = 0.0, stream: bool = False, tools: List[Any] = None):
         self.tools = tools or []
-        self.client = client
         self.base_url = base_url
         self.api_key = api_key
         self.model = model
         self.stream = stream
         self.temperature = temperature
         self.max_tokens = max_tokens
+
+        # NEW: Add session_id for tracing (will be set by Manus)
+        self.session_id = None
+
+        # NEW: Wrap OpenAI client with Langfuse instrumentation if enabled
+        if is_langfuse_enabled() and LANGFUSE_OPENAI_AVAILABLE:
+            try:
+                self.client = langfuse_openai.OpenAI(
+                    base_url=base_url,
+                    api_key=api_key,
+                    http_client=client._client
+                )
+                print(f"[LangFuse] ✅ ChatLLM using instrumented OpenAI client")
+            except Exception as e:
+                print(f"[LangFuse] ⚠️  Failed to wrap OpenAI client: {e}")
+                self.client = client
+        else:
+            self.client = client
 
     @staticmethod
     def clean_none_values(data):
@@ -47,12 +72,31 @@ class ChatLLM:
             return data
 
     @time_record
+    @observe(name="llm_create_with_tools")
     def create_with_tools(self, messages: List[Dict[str, Any]], tools: List[Dict]):
         """
         Create a chat completion with support for function/tool calls
         """
         import time
         import json
+
+        # NEW: Update trace with metadata
+        if is_langfuse_enabled():
+            try:
+                trace_params = {
+                    "metadata": {
+                        "model": self.model,
+                        "temperature": self.temperature,
+                        "tools_count": len(tools),
+                        "base_url": self.base_url
+                    }
+                }
+                if self.session_id:
+                    trace_params["session_id"] = self.session_id
+                get_langfuse_client().update_current_trace(**trace_params)
+            except Exception as e:
+                print(f"[LangFuse] Failed to update trace: {e}")
+
         # 清洗提示词，去除None
         messages = ChatLLM.clean_none_values(messages)
         print(f'create_with_tools messages:{messages}')
@@ -86,10 +130,28 @@ class ChatLLM:
         return response.choices[0].message
 
     @time_record
+    @observe(name="llm_chat_to_llm")
     def chat_to_llm(self, messages: List[Dict[str, Any]]):
-        # 清洗提示词，去除None
         import time
         import json
+
+        # NEW: Update trace with metadata
+        if is_langfuse_enabled():
+            try:
+                trace_params = {
+                    "metadata": {
+                        "model": self.model,
+                        "temperature": self.temperature,
+                        "max_tokens": self.max_tokens,
+                        "base_url": self.base_url
+                    }
+                }
+                if self.session_id:
+                    trace_params["session_id"] = self.session_id
+                get_langfuse_client().update_current_trace(**trace_params)
+            except Exception as e:
+                print(f"[LangFuse] Failed to update trace: {e}")
+
         # 清洗提示词，去除None
         messages = ChatLLM.clean_none_values(messages)
         print(f'chat_to_llm messages:{messages}')

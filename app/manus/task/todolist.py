@@ -28,6 +28,9 @@ class Plan:
 
     def __init__(self, title: str = "", steps: List[str] = None, dependencies: Dict[int, List[int]] = None):
         self.title = title
+        # NEW: Add session_id for tracing
+        # Each Plan instance gets a unique session ID that groups all related traces
+        self.session_id = f"manus-task-{id(self)}"
         self.steps = steps if steps else []
         # 使用步骤内容（中文）作为key存储状态、备注和详细信息
         self.step_statuses = {step: "not_started" for step in self.steps}

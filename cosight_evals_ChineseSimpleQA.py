@@ -13,6 +13,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import atexit
 import datetime
 import json
 import os
@@ -20,6 +21,7 @@ import traceback
 from pathlib import Path
 import shutil
 from app.manus.manus_hle import Manus
+from app.manus.llm.langfuse_config import initialize_langfuse, shutdown_langfuse
 from evals.gaia import hle, pre_judge_hle, post_judge_hle, chinesesimpleqa_multi_route, post_judge_hle_four_route
 from llm import llm_for_plan, llm_for_act, llm_for_tool, llm_for_vision
 from llm import llm_for_plan_route2, llm_for_act_route2, llm_for_tool_route2, llm_for_vision_route2
@@ -150,6 +152,13 @@ def extract_ids_in_range(jsonl_file, start=20, end=40):
         return []
 
 if __name__ == '__main__':
+    # NEW: Initialize Langfuse observability
+    print("\n=== Langfuse Observability Setup ===")
+    initialize_langfuse()
+    print("=== Langfuse Setup Complete ===\n")
+
+    # NEW: Register shutdown handler to flush traces
+    atexit.register(shutdown_langfuse)
 
     os.makedirs(WORKSPACE_PATH, exist_ok=True)
     os.makedirs(LOG_PATH, exist_ok=True)

@@ -13,6 +13,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import atexit
 import datetime
 import json
 import os
@@ -20,6 +21,7 @@ import traceback
 from pathlib import Path
 import shutil
 from app.manus.manus import Manus
+from app.manus.llm.langfuse_config import initialize_langfuse, shutdown_langfuse
 from evals.gaia import gaia_level1, gaia, gaia_level2, gaia_level3
 from llm import llm_for_plan, llm_for_act, llm_for_tool, llm_for_vision
 
@@ -94,6 +96,13 @@ def save_submissions(results: str, submissions_path: str):
 
 
 if __name__ == '__main__':
+    # NEW: Initialize Langfuse observability
+    print("\n=== Langfuse Observability Setup ===")
+    initialize_langfuse()
+    print("=== Langfuse Setup Complete ===\n")
+
+    # NEW: Register shutdown handler to flush traces
+    atexit.register(shutdown_langfuse)
 
     os.makedirs(WORKSPACE_PATH, exist_ok=True)
     os.makedirs(LOG_PATH, exist_ok=True)

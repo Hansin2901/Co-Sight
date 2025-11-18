@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any
 
 from app.manus.task.plan_report_manager import plan_report_event_manager
+from app.manus.llm.langfuse_config import is_langfuse_enabled, observe, get_langfuse_client
 from llm import llm_for_plan, llm_for_act, llm_for_tool, llm_for_vision
 
 sys.path.insert(1, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
@@ -68,8 +69,42 @@ class Manus:
         self.tool_llm = tool_llm
         self.vision_llm = vision_llm
 
+        # NEW: Propagate session_id to all LLM instances for tracing
+        if is_langfuse_enabled():
+            try:
+                if hasattr(plan_llm, 'session_id'):
+                    plan_llm.session_id = self.plan.session_id
+                if hasattr(act_llm, 'session_id'):
+                    act_llm.session_id = self.plan.session_id
+                if hasattr(tool_llm, 'session_id'):
+                    tool_llm.session_id = self.plan.session_id
+                if hasattr(vision_llm, 'session_id'):
+                    vision_llm.session_id = self.plan.session_id
+                print(f"[LangFuse] 📊 Session ID set for Manus: {self.plan.session_id}")
+            except Exception as e:
+                print(f"[LangFuse] Warning: Failed to set session_id: {e}")
+
     @time_record
+    @observe(name="manus_execute")
     def execute(self, question, output_format=""):
+        # NEW: Initialize trace with session and metadata
+        if is_langfuse_enabled():
+            try:
+                get_langfuse_client().update_current_trace(
+                    session_id=self.plan.session_id,
+                    name=f"Manus: {question[:60]}...",
+                    metadata={
+                        "question": question,
+                        "output_format": output_format,
+                        "plan_id": self.plan_id,
+                        "task_type": "research"
+                    },
+                    tags=["manus-task", "session-start"]
+                )
+                print(f"[LangFuse] 📊 Manus execution started: {self.plan.session_id}")
+            except Exception as e:
+                print(f"[LangFuse] Failed to set session: {e}")
+
         create_task = question
         retry_count = 0
         self.task_planner_agent.create_fact(question)
@@ -96,6 +131,7 @@ class Manus:
 
 
     @time_record
+    @observe(name="manus_execute_actor")
     def execute_actor(self,question):
         task_actor_agent = TaskActorAgent(create_actor_instance(f"actor_for_step_{0}"), self.act_llm,
                                           self.vision_llm, self.tool_llm, self.plan_id)
@@ -104,6 +140,7 @@ class Manus:
         return result
 
 
+    @observe(name="manus_execute_steps_parallel")
     def execute_steps(self, question, ready_steps):
         from threading import Thread, Semaphore
         from queue import Queue
@@ -115,6 +152,19 @@ class Manus:
         def execute_step(step_index):
             semaphore.acquire()
             try:
+                # NEW: Update span metadata for this step
+                if is_langfuse_enabled():
+                    try:
+                        get_langfuse_client().update_current_span(
+                            name=f"execute_step_{step_index}",
+                            metadata={
+                                "step_index": step_index,
+                                "step_description": self.plan.steps[step_index] if step_index < len(self.plan.steps) else "unknown"
+                            }
+                        )
+                    except Exception as e:
+                        print(f"[LangFuse] Failed to update step span: {e}")
+
                 print(f"Starting execution of step {step_index}")
                 # 每个线程创建独立的TaskActorAgent实例
                 task_actor_agent = TaskActorAgent(create_actor_instance(f"actor_for_step_{step_index}"), self.act_llm,

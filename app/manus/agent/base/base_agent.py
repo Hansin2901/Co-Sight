@@ -25,6 +25,7 @@ from app.agent_dispatcher.domain.plan.action.skill.mcp.engine import MCPEngine
 from app.agent_dispatcher.infrastructure.entity.AgentInstance import AgentInstance
 from app.manus.agent.base.skill_to_tool import convert_skill_to_tool
 from app.manus.llm.chat_llm import ChatLLM
+from app.manus.llm.langfuse_config import observe
 from app.manus.task.time_record_util import time_record
 from app.manus.task.todolist import Plan
 
@@ -49,6 +50,7 @@ class BaseAgent:
                     return tool, func.name
         return None
 
+    @observe(name="base_agent_execute")
     def execute(self, messages: List[Dict[str, Any]], step_index=None, plan: Plan = None, max_iteration=10):
         for i in range(max_iteration):
             # print(f"messages:{messages}")
@@ -92,6 +94,7 @@ class BaseAgent:
                 return result["content"]
         return None
 
+    @observe(name="base_agent_execute_tool_calls")
     def _execute_tool_calls(self, tool_calls, step_index, plan: Plan = None, ):
         results = []
         with ThreadPoolExecutor() as executor:
@@ -170,6 +173,7 @@ class BaseAgent:
         return messages[-1].get("content")
 
     @time_record
+    @observe(name="base_agent_execute_single_tool")
     def _execute_tool_call(self, function_name="", function_args="", tool_call_id="", step_index=None, plan: Plan = None):
         try:
             # Clean and validate JSON
