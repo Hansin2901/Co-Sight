@@ -35,10 +35,10 @@ async def fetch_url_content(url: str) -> str:
             'Connection': 'keep-alive'
         }
         
-        proxy = "http://proxyhk.zte.com.cn:80"
+        # proxy = "http://proxyhk.zte.com.cn:80"
         timeout = aiohttp.ClientTimeout(total=10)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(url, headers=headers, proxy=proxy) as response:
+            async with session.get(url, headers=headers) as response:
                 if response.status == 200:
                     # Check content type
                     content_type = response.headers.get('Content-Type', '')
@@ -85,8 +85,8 @@ def search_google(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            proxy = "http://proxyhk.zte.com.cn:80"
-            links = list(search(query, num_results=max_results, proxy=proxy, advanced=True))
+            # proxy = "http://proxyhk.zte.com.cn:80"
+            links = list(search(query, num_results=max_results, advanced=True))
             
             # Create a new event loop for the current thread
             loop = asyncio.new_event_loop()

@@ -16,7 +16,7 @@
 import os
 
 # 代理服务器地址
-proxy = "http://proxyhk.zte.com.cn:80"
+proxy = ""
 
 # 设置 HTTP 和 HTTPS 代理
 os.environ['ALL_PROXY'] = ''

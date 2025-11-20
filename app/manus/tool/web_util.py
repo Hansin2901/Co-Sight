@@ -18,12 +18,13 @@ import sys
 import traceback
 import aiohttp  # For asynchronous PDF downloading
 
-from browser_use import Agent
+from browser_use import Agent, BrowserSession
 from browser_use.agent.views import AgentHistoryList
-from browser_use.browser.browser import Browser, BrowserConfig
-from browser_use.browser.context import BrowserContext, BrowserContextConfig
+# from browser_use.browser.browser import Browser, BrowserConfig
+# from browser_use.browser.context import BrowserContext, BrowserContextConfig
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
+# from langchain_openai import ChatOpenAI
+from browser_use.llm.openai.chat import ChatOpenAI
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 import asyncio
@@ -103,97 +104,8 @@ Your goal is to extract precisely the information needed with minimal browsing s
 """
 
 
-async def download_pdf(pdf_url: str) -> tuple[bool, str]:
-    """
-    Asynchronously download a PDF file to the local directory
-
-    Args:
-        pdf_url: URL of the PDF file
-
-    Returns:
-        A tuple containing download success status and file path/error message
-    """
-    try:
-        # Extract filename from URL
-        filename = pdf_url.split('/')[-1]
-        if not filename.endswith('.pdf'):
-            filename = f"{filename}.pdf"
-
-        # Ensure filename uniqueness
-        base, ext = os.path.splitext(filename)
-        counter = 1
-        while os.path.exists(os.path.join(PDF_DOWNLOAD_DIR, filename)):
-            filename = f"{base}_{counter}{ext}"
-            counter += 1
-
-        file_path = os.path.join(PDF_DOWNLOAD_DIR, filename)
-
-        # Download PDF
-        async with aiohttp.ClientSession() as session:
-            async with session.get(pdf_url) as response:
-                if response.status == 200:
-                    content = await response.read()
-                    with open(file_path, 'wb') as f:
-                        f.write(content)
-                    print(f"Successfully downloaded PDF to: {file_path}")
-                    return (True, file_path)
-                else:
-                    error_msg = f"Download failed, HTTP status code: {response.status}"
-                    print(error_msg)
-                    return (False, error_msg)
-
-    except Exception as e:
-        error_msg = f"Error occurred while downloading PDF: {str(e)}"
-        print(error_msg)
-        return (False, error_msg)
-
-
-async def extract_and_download_pdfs(browser_context: BrowserContext) -> list[dict]:
-    """
-    Extract all PDF links from current page and download them
-
-    Args:
-        browser_context: Browser context object
-
-    Returns:
-        List containing information about each PDF download
-    """
-    pdf_downloads = []
-
-    try:
-        # Execute JavaScript to extract all links containing .pdf
-        pdf_links = await browser_context.page.evaluate("""
-            () => {
-                const links = Array.from(document.getElementsByTagName('a'));
-                return links
-                    .filter(link => link.href && link.href.toLowerCase().endsWith('.pdf'))
-                    .map(link => ({
-                        url: link.href,
-                        text: link.textContent?.trim() || 'No description'
-                    }));
-            }
-        """)
-
-        print(f"Found {len(pdf_links)} PDF links")
-
-        # Download each PDF
-        for link in pdf_links:
-            success, result = await download_pdf(link['url'])
-            pdf_downloads.append({
-                'url': link['url'],
-                'description': link['text'],
-                'downloaded': success,
-                'path_or_error': result
-            })
-
-    except Exception as e:
-        print(f"Error occurred while extracting PDF links: {str(e)}")
-
-    return pdf_downloads
-
-
 async def browser_use(
-        task_prompt: str = Field(description="The task to perform using the browser.")  # New parameter to control PDF downloading
+        task_prompt: str = Field(description="The task to perform using the browser.")
 ) -> str:
     """
     Perform browser actions using the browser-use package.
@@ -203,54 +115,40 @@ async def browser_use(
     Returns:
         str: The result of the browser actions.
     """
-    download_pdfs = True
-    browser = Browser(
-        config=BrowserConfig(
-            headless=False,
-            new_context_config=BrowserContextConfig(
-                disable_security=True,
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                minimum_wait_page_load_time=10,
-                maximum_wait_page_load_time=30,
-            ),
-        )
+    # Ensure download directory exists
+    os.makedirs(PDF_DOWNLOAD_DIR, exist_ok=True)
+    downloads_path = os.path.abspath(PDF_DOWNLOAD_DIR)
+
+    browser_session = BrowserSession(
+        headless=False,
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        minimum_wait_page_load_time=10,
+        args=["--disable-web-security"],
+        traces_dir=os.getenv("browser_trace.log") if os.getenv("browser_trace.log") else None,
+        downloads_path=downloads_path
     )
-    browser_context = BrowserContext(
-        config=BrowserContextConfig(
-            trace_path=os.getenv("browser_trace.log")
-        ),
-        browser=browser,
-    )
+    
     agent = Agent(
         task=task_prompt,
         llm=ChatOpenAI(
             model=os.getenv("TOOL_MODEL_NAME"),
             api_key=os.getenv("TOOL_API_KEY"),
             base_url=os.getenv("TOOL_API_BASE_URL"),
-            model_name=os.getenv("TOOL_MODEL_NAME"),
-            openai_api_base=os.getenv("TOOL_API_BASE_URL"),
-            openai_api_key=os.getenv("TOOL_API_KEY"),
             temperature=1.0,
         ),
-        browser_context=browser_context,
+        browser=browser_session,
         extend_system_message=browser_system_prompt,
     )
 
-    pdf_results = []  # Store PDF download results
-
     try:
         browser_execution: AgentHistoryList = await agent.run(max_steps=50)
-
-        # If PDF download is enabled, try to extract and download PDFs
-        if download_pdfs:
-            pdf_results = await extract_and_download_pdfs(browser_context)
 
         if (
                 browser_execution is not None
                 and browser_execution.is_done()
                 and browser_execution.is_successful()
         ):
-            exec_trace = browser_execution.extracted_content()
+            exec_trace = browser_execution.model_dump()
             print(
                 ">>> 🌏 Browse Execution Succeed!\n"
                 f">>> 💡 Result: {json.dumps(exec_trace, ensure_ascii=False, indent=4)}\n"
@@ -258,45 +156,29 @@ async def browser_use(
             )
 
             final_result = browser_execution.final_result()
-
-            # Add PDF download results to final result
-            if pdf_results:
-                final_result += "\n\nPDF Download Results:\n" + json.dumps(
-                    pdf_results,
-                    ensure_ascii=False,
-                    indent=2
-                )
+            
+            # Check for downloaded files
+            downloaded_files = []
+            if os.path.exists(downloads_path):
+                downloaded_files = [f for f in os.listdir(downloads_path) if f.endswith('.pdf')]
+            
+            if downloaded_files:
+                final_result += f"\n\nPDF Download Results: Found {len(downloaded_files)} files in {downloads_path}: {', '.join(downloaded_files)}"
 
             print(f"Browser execution success for task: {task_prompt}, result {final_result}")
             return final_result
 
         else:
             result = f"Browser execution failed for task: {task_prompt}"
-
-            # Add PDF download results even if main task failed
-            if pdf_results:
-                result += "\n\nPDF Download Results:\n" + json.dumps(
-                    pdf_results,
-                    ensure_ascii=False,
-                    indent=2
-                )
             return result
 
     except Exception as e:
         error_msg = f"Browser execution failed for task: {task_prompt} due to {str(e)}"
         print(f"Browser execution failed: {traceback.format_exc()}")
-
-        # Add PDF download results even if exception occurred
-        if pdf_results:
-            error_msg += "\n\nPDF Download Results:\n" + json.dumps(
-                pdf_results,
-                ensure_ascii=False,
-                indent=2
-            )
         return error_msg
 
     finally:
-        await browser.close()
+        await browser_session.close()
         print("Browser Closed!")
 
 

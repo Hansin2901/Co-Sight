@@ -122,10 +122,10 @@ if __name__ == '__main__':
         "base_url": "https://api.deepseek.com/",
         "api_key": "sk-425469d1f43543cc87ab12ebf8c8e081",
         "model_name": "deepseek-chat",
-        "proxy": "http://proxyhk.zte.com.cn:80"
+        # "proxy": "http://proxyhk.zte.com.cn:80"
     }
     web_search_info = {
-        "proxy": "http://proxyhk.zte.com.cn:80",
+        # "proxy": "http://proxyhk.zte.com.cn:80",
         "api_key": "tvly-dev-123"
     }
     deep_search_toolkit = DeepSearchToolkit(model_info, web_search_info)

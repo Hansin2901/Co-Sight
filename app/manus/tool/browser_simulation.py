@@ -73,18 +73,18 @@ if __name__ == '__main__':
     import os
 
     # 代理服务器地址
-    proxy = "http://proxyhk.zte.com.cn:80"
+    # proxy = "http://proxyhk.zte.com.cn:80"
 
     # 设置 HTTP 和 HTTPS 代理
     os.environ['ALL_PROXY'] = ''
     os.environ['all_proxy'] = ''
     os.environ['SOCKS_PROXY'] = ''
     os.environ['socks_proxy'] = ''
-    os.environ['HTTPS_PROXY'] = proxy
-    os.environ['https_proxy'] = proxy
-    os.environ['HTTP_PROXY'] = proxy
-    os.environ['http_proxy'] = proxy
-    os.environ['URL_CONTEXT_PATH'] = 'proxy'
+    # os.environ['HTTPS_PROXY'] = proxy
+    # os.environ['https_proxy'] = proxy
+    # os.environ['HTTP_PROXY'] = proxy
+    # os.environ['http_proxy'] = proxy
+    # os.environ['URL_CONTEXT_PATH'] = 'proxy'
     # __import__('pysqlite3')
     # import sys
     #

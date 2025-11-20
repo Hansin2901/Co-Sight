@@ -100,8 +100,8 @@ class ArxivToolkit:
                 authors, entry ID, summary, and extracted text from the paper.
         """
         try:
-            os.environ['HTTP_PROXY'] = "http://proxy.zte.com.cn:80"
-            os.environ['HTTPS_PROXY'] = "http://proxy.zte.com.cn:80"
+            os.environ['HTTP_PROXY'] = ""
+            os.environ['HTTPS_PROXY'] = ""
             search_results = self._get_search_results(
                 query, paper_ids, 5
             )
@@ -129,8 +129,9 @@ class ArxivToolkit:
                 papers_data.append(paper_info)
             return papers_data
         finally:
-            os.environ['HTTP_PROXY'] = "http://proxyhk.zte.com.cn:80"
-            os.environ['HTTPS_PROXY'] = "http://proxyhk.zte.com.cn:80"
+            pass
+            # os.environ['HTTP_PROXY'] = "http://proxyhk.zte.com.cn:80"
+            # os.environ['HTTPS_PROXY'] = "http://proxyhk.zte.com.cn:80"
 
     @format_check()
     def download_papers(
@@ -156,8 +157,8 @@ class ArxivToolkit:
             str: Status message indicating success or failure.
         """
         try:
-            os.environ['HTTP_PROXY'] = "http://proxy.zte.com.cn:80"
-            os.environ['HTTPS_PROXY'] = "http://proxy.zte.com.cn:80"
+            os.environ['HTTP_PROXY'] = ""
+            os.environ['HTTPS_PROXY'] = ""
             print(f"query:{query}, paper_id:{paper_ids},max_results:{max_results}")
             search_results = self._get_search_results(
                 query, paper_ids, max_results
@@ -174,8 +175,9 @@ class ArxivToolkit:
         except Exception as e:
             return f"An error occurred: {e}"
         finally:
-            os.environ['HTTP_PROXY'] = "http://proxyhk.zte.com.cn:80"
-            os.environ['HTTPS_PROXY'] = "http://proxyhk.zte.com.cn:80"
+            pass
+            # os.environ['HTTP_PROXY'] = "http://proxyhk.zte.com.cn:80"
+            # os.environ['HTTPS_PROXY'] = "http://proxyhk.zte.com.cn:80"
 
 
 def main():
@@ -208,8 +210,8 @@ def main():
 
 
 if __name__ == "__main__":
-    os.environ['HTTP_PROXY'] = "http://proxy.zte.com.cn:80"
-    os.environ['HTTPS_PROXY'] = "http://proxy.zte.com.cn:80"
+    os.environ['HTTP_PROXY'] = ""
+    os.environ['HTTPS_PROXY'] = ""
     # main()
     arxiv_toolkit = ArxivToolkit()
     test_paper_id = "2303.18223"  # A known arXiv paper ID

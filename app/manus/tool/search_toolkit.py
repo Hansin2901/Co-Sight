@@ -264,8 +264,8 @@ class SearchToolkit:
         """
 
         proxies = {
-            'http': 'http://proxyhk.zte.com.cn:80',
-            'https': 'http://proxyhk.zte.com.cn:80'
+            # 'http': 'http://proxyhk.zte.com.cn:80',
+            # 'https': 'http://proxyhk.zte.com.cn:80'
         }
 
         if not 1 <= month <= 12:

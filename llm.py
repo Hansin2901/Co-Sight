@@ -41,7 +41,8 @@ def set_model(model_config: dict[str, Optional[str | int | float]]):
             'Authorization': model_config['api_key']
         },
         "verify": False,
-        "trust_env": False
+        "trust_env": False,
+        "timeout": 300.0  # 5 minutes timeout for LLM responses
     }
 
     if model_config['proxy']:
@@ -83,16 +84,16 @@ llm_for_vision = set_model(vision_model_config)
 
 
 # second route
-plan_model_config_route2 = get_second_route_model_config()
+plan_model_config_route2 = get_plan_model_config()
 llm_for_plan_route2 = set_model(plan_model_config_route2)
 
-act_model_config_route2 = get_second_route_model_config()
+act_model_config_route2 = get_act_model_config()
 llm_for_act_route2 = set_model(act_model_config_route2)
 
-tool_model_config_route2 = get_second_route_model_config()
+tool_model_config_route2 = get_tool_model_config()
 llm_for_tool_route2 = set_model(tool_model_config_route2)
 
-vision_model_config_route2 = get_second_route_model_config()
+vision_model_config_route2 = get_vision_model_config()
 llm_for_vision_route2 = set_model(vision_model_config_route2)
 
 # # judge model
