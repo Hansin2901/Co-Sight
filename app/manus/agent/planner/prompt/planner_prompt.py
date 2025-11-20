@@ -177,6 +177,20 @@ You should first analyze the answer format required by the question and then out
 Your response should include the following content:
 - `analysis`: enclosed by <analysis> </analysis>, a detailed analysis of the reasoning result. You MUST summarize the confidence level of key intermediate results. The assessment conclusion must be selected exclusively from the following options: "Completely Certain (100%)", "Highly Credible (80%)", "Moderately Credible (70%)", "Uncertain (50%)"
 - `final_answer`: enclosed by <final_answer> </final_answer>, the final answer to the question.
+"""
+    
+    # Add output_format requirements if specified (similar to create_plan and re_plan)
+    if output_format:
+        output_format_prompt = f"""
+<output_format_requirements> 
+Ensure your final answer follows this specific format and requirements:
+{output_format}
+</output_format_requirements>
+"""
+        finalize_prompt += output_format_prompt
+    else:
+        # Only add concise hint if no output_format specified
+        finalize_prompt += """
 Here are some hint about the final answer:
 <hint>
 Your final answer must be output exactly in the format specified by the question. Please keep the answer concise:
@@ -184,4 +198,5 @@ Your final answer must be output exactly in the format specified by the question
 - Keep your answers concise and do NOT repeat the questions
 </hint>
 """
+    
     return finalize_prompt

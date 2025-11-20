@@ -116,13 +116,18 @@ class ArxivToolkit:
                     "summary": paper.summary,
                     "pdf_url": paper.pdf_url,
                 }
+                # TEMPORARILY DISABLED: PDF text extraction is very slow (downloads+processes entire PDF)
+                # Using paper summary instead for faster performance
                 # Extract text from the paper
-                try:
-                    # TODO: Use chunkr instead of atxiv_to_text for better
-                    # performance and reliability
-                    text = arxiv_to_text(paper_info["pdf_url"])
-                except Exception as e:
-                    text = f"Failed to extract text content from the PDF at the specified URL. URL: {paper_info.get('pdf_url', 'Unknown')} | Error: {e}"
+                # try:
+                #     # TODO: Use chunkr instead of atxiv_to_text for better
+                #     # performance and reliability
+                #     text = arxiv_to_text(paper_info["pdf_url"])
+                # except Exception as e:
+                #     text = f"Failed to extract text content from the PDF at the specified URL. URL: {paper_info.get('pdf_url', 'Unknown')} | Error: {e}"
+                
+                # Use the summary (abstract) instead of full PDF text - much faster!
+                text = paper.summary
 
                 paper_info['paper_text'] = text[:2000]
 

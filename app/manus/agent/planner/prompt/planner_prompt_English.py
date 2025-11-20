@@ -183,4 +183,15 @@ Your final answer must be output exactly in the format specified by the question
 - Keep your answers concise and do NOT repeat the questions
 </hint>
 """
+    
+    # Add output format instructions if provided
+    if output_format:
+        finalize_prompt += f"""
+
+# CRITICAL OUTPUT FORMAT REQUIREMENTS:
+{output_format}
+
+You MUST follow the above format requirements exactly when generating your final_answer. Pay special attention to citation format and structure requirements.
+"""
+    
     return finalize_prompt

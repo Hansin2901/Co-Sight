@@ -14,7 +14,8 @@
 #    under the License.
 
 import re
-from typing import Dict
+import json
+from typing import Dict, List, Any
 
 from app.agent_dispatcher.infrastructure.entity.AgentInstance import AgentInstance
 from app.manus.agent.base.base_agent import BaseAgent
@@ -98,4 +99,108 @@ class TaskPlannerAgent(BaseAgent):
         except Exception as e:
             print(f"Error extracting answer: {e}, current content: {content}")
             return content
+    
+    def _parse_plan_from_text(self, text_response: str) -> dict:
+        """
+        Fallback parser: Extract plan structure from text response when LLM doesn't call create_plan tool.
+        
+        Parses formats like:
+        - title: Research radar data representation
+        - steps: ["Search ArXiv for papers", "Analyze findings", ...]
+        - dependencies: {1: [0], 2: [0, 1]}
+        
+        Returns dict with keys: title, steps, dependencies (or None if parsing fails)
+        """
+        try:
+            print("[FALLBACK] LLM returned text instead of calling create_plan tool. Attempting to parse...")
+            
+            # Extract title
+            title_match = re.search(r'title:\s*(.+?)(?:\n|$)', text_response, re.IGNORECASE)
+            title = title_match.group(1).strip() if title_match else "Research Plan"
+            
+            # Extract steps - try multiple formats
+            steps = []
+            
+            # Format 1: steps: ["step1", "step2", ...]
+            steps_match = re.search(r'steps:\s*(\[.+?\])', text_response, re.IGNORECASE | re.DOTALL)
+            if steps_match:
+                try:
+                    steps = json.loads(steps_match.group(1))
+                except:
+                    # Try with single quotes
+                    steps_str = steps_match.group(1).replace("'", '"')
+                    steps = json.loads(steps_str)
+            else:
+                # Format 2: Numbered or bulleted list
+                # Look for patterns like "1.", "2.", or "-", "*"
+                list_pattern = r'(?:^\d+[\.\)]\s*|\n\d+[\.\)]\s*|\n[-*]\s*)(.+?)(?=\n\d+[\.\)]|\n[-*]|\n\n|$)'
+                list_matches = re.findall(list_pattern, text_response, re.MULTILINE)
+                if list_matches:
+                    steps = [s.strip() for s in list_matches if s.strip()]
+            
+            # Extract dependencies
+            dependencies = {}
+            dep_match = re.search(r'dependencies:\s*(\{.+?\})', text_response, re.IGNORECASE | re.DOTALL)
+            if dep_match:
+                try:
+                    dependencies = json.loads(dep_match.group(1))
+                    # Convert string keys to int if needed
+                    dependencies = {int(k): v for k, v in dependencies.items()}
+                except Exception as e:
+                    print(f"[FALLBACK] Could not parse dependencies: {e}")
+                    dependencies = {}
+            
+            # Validation
+            if not steps:
+                print("[FALLBACK] Failed to extract steps from text response")
+                return None
+            
+            result = {
+                "title": title,
+                "steps": steps,
+                "dependencies": dependencies
+            }
+            
+            print(f"[FALLBACK] Successfully parsed plan:")
+            print(f"  - Title: {title}")
+            print(f"  - Steps: {len(steps)} steps")
+            print(f"  - Dependencies: {len(dependencies)} dependency groups")
+            
+            return result
+            
+        except Exception as e:
+            print(f"[FALLBACK] Parsing failed: {e}")
+            return None
+    
+    @observe(name="planner_execute_with_fallback")
+    def execute(self, messages: List[Dict[str, Any]], step_index=None, plan=None, max_iteration=10):
+        """
+        Override base execute to add fallback parsing for create_plan responses.
+        """
+        # Call parent execute
+        result = super().execute(messages, step_index, plan, max_iteration)
+        
+        # Check if we're in create_plan or update_plan context and got text instead of tool call
+        # Look for the create_plan prompt in recent messages
+        is_plan_creation = any("create_plan tool" in msg.get("content", "").lower() 
+                               for msg in messages[-3:] if isinstance(msg, dict))
+        
+        # If result is a string (not from tool execution) and we're in planning context
+        if isinstance(result, str) and is_plan_creation and "title:" in result.lower():
+            print("[FALLBACK] Detected text-based plan response, attempting to parse and call tool manually...")
+            
+            parsed_plan = self._parse_plan_from_text(result)
+            
+            if parsed_plan:
+                # Manually call create_plan function with parsed data
+                try:
+                    print("[FALLBACK] Calling create_plan function with parsed data...")
+                    tool_result = self.functions["create_plan"](**parsed_plan)
+                    print(f"[FALLBACK] Successfully executed create_plan: {tool_result}")
+                    return tool_result
+                except Exception as e:
+                    print(f"[FALLBACK] Failed to call create_plan function: {e}")
+                    # Fall through to return original result
+        
+        return result
 

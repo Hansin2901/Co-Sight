@@ -161,12 +161,18 @@ class ChatLLM:
             try:
                 if attempt == 1:
                     model_name = 'anthropic/claude-sonnet-4'
+                print(f"[DEBUG] About to call LLM API (attempt {attempt + 1})...")
+                print(f"[DEBUG] Model: {model_name}, Base URL: {self.base_url}")
+                print(f"[DEBUG] Temperature: {self.temperature}, Max tokens: {self.max_tokens}")
+                import sys
+                sys.stdout.flush()
                 response = self.client.chat.completions.create(
                     model=model_name,
                     messages=messages,
                     temperature=self.temperature,
                     max_tokens=self.max_tokens
                 )
+                print(f"[DEBUG] LLM API call completed successfully!")
                 print(f"LLM with tools chat completions response{attempt + 1} is {response}")
                 break
             except Exception as e:

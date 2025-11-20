@@ -75,7 +75,7 @@ class TaskActorAgent(BaseAgent):
                                                  "model": tool_llm.model,
                                                  "temperature": tool_llm.temperature,
                                                  "api_key": tool_llm.api_key})
-        arxiv_toolkit = ArxivToolkit()
+        arxiv_toolkit = ArxivToolkit(timeout=60.0)
         code_toolkit = CodeToolkit(sandbox="subprocess")
         all_functions = {
             # "read_excel_color": read_excel_color,

@@ -34,9 +34,12 @@ def convert_skill_to_tool(skill, lang='en') -> dict:
 
         if 'properties' in parameters:
             for prop_name, prop_value in parameters['properties'].items():
-                if lang in prop_value:
-                    prop_value['description'] = prop_value[lang]
-                    for key in ['zh', 'en']:
+                # Fix: Check for 'description_en' or 'description_zh' keys, not just 'en' or 'zh'
+                description_key = f'description_{lang}'
+                if description_key in prop_value:
+                    prop_value['description'] = prop_value[description_key]
+                    # Remove language-specific description keys to match OpenAI schema
+                    for key in ['description_zh', 'description_en']:
                         if key in prop_value:
                             del prop_value[key]
 
