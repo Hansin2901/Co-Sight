@@ -182,7 +182,7 @@ class TaskPlannerAgent(BaseAgent):
         
         # Check if we're in create_plan or update_plan context and got text instead of tool call
         # Look for the create_plan prompt in recent messages
-        is_plan_creation = any("create_plan tool" in msg.get("content", "").lower() 
+        is_plan_creation = any("create_plan tool" in (msg.get("content") or "").lower() 
                                for msg in messages[-3:] if isinstance(msg, dict))
         
         # If result is a string (not from tool execution) and we're in planning context

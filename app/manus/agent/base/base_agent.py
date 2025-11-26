@@ -25,7 +25,7 @@ from app.agent_dispatcher.domain.plan.action.skill.mcp.engine import MCPEngine
 from app.agent_dispatcher.infrastructure.entity.AgentInstance import AgentInstance
 from app.manus.agent.base.skill_to_tool import convert_skill_to_tool
 from app.manus.llm.chat_llm import ChatLLM
-from app.manus.llm.langfuse_config import observe
+from app.manus.llm.langfuse_config import observe, is_langfuse_enabled, get_langfuse_client
 from app.manus.task.time_record_util import time_record
 from app.manus.task.todolist import Plan
 
@@ -49,6 +49,119 @@ class BaseAgent:
                 if func.name == tool_name:
                     return tool, func.name
         return None
+
+    def _detect_tool_category(self, function_name: str) -> str:
+        """
+        Detect tool category based on function name for better tracing visibility.
+        
+        Returns category like: web_search, arxiv, wikipedia, file, code, document, etc.
+        """
+        name_lower = function_name.lower()
+        
+        # Search tools
+        if 'google' in name_lower or 'duckduckgo' in name_lower or 'linkup' in name_lower:
+            return 'web_search'
+        if 'wiki' in name_lower:
+            return 'wikipedia'
+        if 'arxiv' in name_lower:
+            return 'arxiv'
+        if 'search' in name_lower:
+            return 'search'
+        
+        # Web tools
+        if 'scrape' in name_lower or 'fetch_website' in name_lower or 'website' in name_lower:
+            return 'web_scraping'
+        if 'browser' in name_lower:
+            return 'browser'
+        if 'download' in name_lower:
+            return 'download'
+        
+        # File tools
+        if 'file' in name_lower or 'read_file' in name_lower or 'write_file' in name_lower:
+            return 'file'
+        if 'excel' in name_lower or 'csv' in name_lower:
+            return 'spreadsheet'
+        if 'pdf' in name_lower or 'document' in name_lower or 'doc' in name_lower:
+            return 'document'
+        if 'pptx' in name_lower or 'powerpoint' in name_lower:
+            return 'presentation'
+        
+        # Code tools
+        if 'code' in name_lower or 'python' in name_lower or 'execute' in name_lower:
+            return 'code_execution'
+        
+        # Media tools
+        if 'image' in name_lower or 'vision' in name_lower or 'visual' in name_lower:
+            return 'image_analysis'
+        if 'audio' in name_lower:
+            return 'audio_analysis'
+        if 'video' in name_lower:
+            return 'video_analysis'
+        
+        # Planning tools
+        if 'plan' in name_lower or 'create_fact' in name_lower:
+            return 'planning'
+        if 'terminate' in name_lower or 'mark_step' in name_lower:
+            return 'control'
+        
+        # Default
+        return 'other'
+
+    def _get_tool_display_name(self, function_name: str, category: str) -> str:
+        """
+        Generate human-readable display name for tool traces.
+        
+        Examples:
+            search_google -> "[Web Search] Google"
+            search_wiki -> "[Wikipedia] Search"
+            arxiv_search_papers -> "[ArXiv] Search Papers"
+            read_file -> "[File] Read"
+        """
+        # Map categories to display prefixes
+        category_prefix = {
+            'web_search': '🔍 Web Search',
+            'wikipedia': '📚 Wikipedia',
+            'arxiv': '📄 ArXiv',
+            'search': '🔎 Search',
+            'web_scraping': '🌐 Web Scraping',
+            'browser': '🖥️  Browser',
+            'download': '⬇️  Download',
+            'file': '📁 File',
+            'spreadsheet': '📊 Spreadsheet',
+            'document': '📄 Document',
+            'presentation': '📊 Presentation',
+            'code_execution': '⚙️  Code',
+            'image_analysis': '🖼️  Image',
+            'audio_analysis': '🔊 Audio',
+            'video_analysis': '🎥 Video',
+            'planning': '🗺️  Planning',
+            'control': '🎯 Control',
+            'other': '🔧 Tool'
+        }
+        
+        prefix = category_prefix.get(category, '🔧 Tool')
+        
+        # Clean up function name for display
+        # search_google -> Google
+        # arxiv_search_papers -> Search Papers
+        # fetch_website_content -> Fetch Website Content
+        
+        name_parts = function_name.replace('_', ' ').title()
+        
+        # For common patterns, simplify further
+        if 'search' in function_name.lower():
+            if 'google' in function_name.lower():
+                return f"{prefix}: Google"
+            elif 'duckduckgo' in function_name.lower():
+                return f"{prefix}: DuckDuckGo"
+            elif 'linkup' in function_name.lower():
+                return f"{prefix}: LinkUp"
+            elif 'wiki' in function_name.lower():
+                return f"{prefix}: {name_parts.replace('Search Wiki', 'Search')}"
+            elif 'arxiv' in function_name.lower():
+                return f"{prefix}: {name_parts.replace('Arxiv ', '').replace('Search Papers', 'Search')}"
+        
+        return f"{prefix}: {name_parts}"
 
     @observe(name="base_agent_execute")
     def execute(self, messages: List[Dict[str, Any]], step_index=None, plan: Plan = None, max_iteration=10):
@@ -107,7 +220,7 @@ class BaseAgent:
 
         messages.append({
             "role": "assistant",
-            "content": response.content,
+            "content": response.content if response.content is not None else "",
             "tool_calls": response.tool_calls
         })
 
@@ -120,7 +233,7 @@ class BaseAgent:
                 return result["content"]
         return None
 
-    @observe(name="base_agent_execute_tool_calls")
+    # REMOVED @observe decorator - individual tool calls are traced, this aggregate is useless
     def _execute_tool_calls(self, tool_calls, step_index, plan: Plan = None, ):
         print(f"\n[DEBUG] === _execute_tool_calls START ===")
         print(f"[DEBUG] Number of tool calls: {len(tool_calls)}")
@@ -218,13 +331,40 @@ class BaseAgent:
         return messages[-1].get("content")
 
     @time_record
-    @observe(name="base_agent_execute_single_tool")
+    @observe()  # Remove static name to allow dynamic naming
     def _execute_tool_call(self, function_name="", function_args="", tool_call_id="", step_index=None, plan: Plan = None):
         print(f"\n[DEBUG] === _execute_tool_call START ===")
         print(f"[DEBUG] Function: {function_name}")
         print(f"[DEBUG] Args (first 200 chars): {function_args[:200] if function_args else 'None'}...")
         print(f"[DEBUG] Tool call ID: {tool_call_id}")
         print(f"[DEBUG] Step index: {step_index}")
+        
+        # Add dynamic span naming for per-tool tracing with category detection
+        if is_langfuse_enabled():
+            try:
+                # Detect tool category/type for better visibility
+                tool_category = self._detect_tool_category(function_name)
+                tool_display_name = self._get_tool_display_name(function_name, tool_category)
+                
+                # Truncate args for metadata (avoid huge traces)
+                args_preview = function_args[:500] if function_args else ""
+                if len(function_args or "") > 500:
+                    args_preview += "... (truncated)"
+                
+                get_langfuse_client().update_current_span(
+                    name=tool_display_name,  # Human-readable name with category!
+                    metadata={
+                        "tool_function": function_name,
+                        "tool_category": tool_category,
+                        "tool_call_id": tool_call_id,
+                        "step_index": step_index,
+                        "args_preview": args_preview,
+                        "plan_id": plan.plan_id if plan else None
+                    }
+                )
+                print(f"[DEBUG] Updated Langfuse span: {tool_display_name} (category: {tool_category})")
+            except Exception as e:
+                print(f"[DEBUG] Failed to update Langfuse span: {e}")
         
         try:
             print(f"[DEBUG] Cleaning and parsing JSON args...")
@@ -266,6 +406,30 @@ class BaseAgent:
             print(f"[DEBUG] Converting result to string (first 200 chars): {str(result)[:200]}...")
             result_str = str(result)
             
+            # Update span with result metadata
+            if is_langfuse_enabled():
+                try:
+                    tool_category = self._detect_tool_category(function_name)
+                    result_preview = result_str[:500] if result_str else ""
+                    if len(result_str or "") > 500:
+                        result_preview += "... (truncated)"
+                    
+                    get_langfuse_client().update_current_span(
+                        metadata={
+                            "tool_function": function_name,
+                            "tool_category": tool_category,
+                            "tool_call_id": tool_call_id,
+                            "step_index": step_index,
+                            "args_preview": function_args[:500] if function_args else "",
+                            "result_preview": result_preview,
+                            "result_length": len(result_str),
+                            "plan_id": plan.plan_id if plan else None,
+                            "status": "success"
+                        }
+                    )
+                except Exception as e:
+                    print(f"[DEBUG] Failed to update span with result: {e}")
+            
             print(f"[DEBUG] Creating return dict...")
             return_dict = {
                 "role": "tool",
@@ -282,7 +446,29 @@ class BaseAgent:
             print(f"[DEBUG] === _execute_tool_call END (ERROR) ===")
             print(f"[DEBUG] Error: {e}")
             import traceback
-            print(f"[DEBUG] Traceback:\n{traceback.format_exc()}")
+            error_trace = traceback.format_exc()
+            print(f"[DEBUG] Traceback:\n{error_trace}")
+            
+            # Update span with error metadata
+            if is_langfuse_enabled():
+                try:
+                    tool_category = self._detect_tool_category(function_name)
+                    get_langfuse_client().update_current_span(
+                        metadata={
+                            "tool_function": function_name,
+                            "tool_category": tool_category,
+                            "tool_call_id": tool_call_id,
+                            "step_index": step_index,
+                            "args_preview": function_args[:500] if function_args else "",
+                            "plan_id": plan.plan_id if plan else None,
+                            "status": "error",
+                            "error_message": str(e),
+                            "error_trace": error_trace[:1000]  # Truncate long traces
+                        }
+                    )
+                except Exception as span_error:
+                    print(f"[DEBUG] Failed to update span with error: {span_error}")
+            
             return {
                 "role": "tool",
                 "name": function_name,

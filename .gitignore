@@ -18,3 +18,12 @@ __pycache__
 **/work_space/**
 **/workspace/**
 google_api_key*.json
+*.pdf
+app/manus/*.pyc
+evaluation-results/
+evaluation-results-with-refs/
+Co-Sight-outputs/
+results/
+*.log
+final-eval-results/
+test-eval-results/

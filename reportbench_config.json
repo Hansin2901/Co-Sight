@@ -1,0 +1,10 @@
+{
+  "arxiv_ids": [
+    "2011.13534"
+    
+  ],
+  "reportbench_dataset": "../ReportBench/ReportBench_v1.1.jsonl",
+  "reportbench_gt_dir": "../ReportBench/ReportBench_v1.1_GT",
+  "output_dir": "Co-Sight-outputs",
+  "evaluation_dir": "evaluation-results"
+}
