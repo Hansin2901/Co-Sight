@@ -130,6 +130,22 @@ class Manus:
         return self.task_planner_agent.finalize_plan(question, output_format)
 
 
+    def get_plan(self):
+        """Get the Plan object for accessing search results and other execution data.
+        
+        Returns:
+            Plan: The plan object containing execution state, steps, and search_results
+        """
+        return self.plan
+    
+    def get_search_results(self):
+        """Convenience method to get search results from the plan.
+        
+        Returns:
+            List[Dict]: List of search result dictionaries with url, title, authors, etc.
+        """
+        return self.plan.get_search_results()
+
     @time_record
     @observe(name="manus_execute_actor")
     def execute_actor(self,question):

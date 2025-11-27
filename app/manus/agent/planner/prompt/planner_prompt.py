@@ -165,7 +165,7 @@ Evaluate if the plan needs adjustment according to the replanning rules in the s
     return replan_prompt
 
 
-def planner_finalize_plan_prompt(question, plan, output_format=""):
+def planner_finalize_plan_prompt(question, plan, output_format="", search_results=None):
     finalize_prompt = f"""
 Now please make a final answer of the original task based on our conversation : <task>{question}</task>
 
@@ -177,6 +177,46 @@ You should first analyze the answer format required by the question and then out
 Your response should include the following content:
 - `analysis`: enclosed by <analysis> </analysis>, a detailed analysis of the reasoning result. You MUST summarize the confidence level of key intermediate results. The assessment conclusion must be selected exclusively from the following options: "Completely Certain (100%)", "Highly Credible (80%)", "Moderately Credible (70%)", "Uncertain (50%)"
 - `final_answer`: enclosed by <final_answer> </final_answer>, the final answer to the question.
+"""
+    
+    # Add search results for citation generation
+    if search_results:
+        finalize_prompt += """
+
+## AVAILABLE SOURCES FOR CITATIONS
+
+Below are papers found during your research. When citing these papers, use EXACTLY the citation format shown:
+
+"""
+        for idx, result in enumerate(search_results[:50], 1):  # Limit to 50 to avoid context overflow
+            authors = result.get('authors', [])
+            if authors:
+                # Format as "FirstAuthorLastName et al." if 2+ authors
+                if len(authors) == 1:
+                    first_author = authors[0]
+                    author_str = first_author.split()[-1] if first_author else "Unknown"
+                else:
+                    first_author = authors[0]
+                    first_author_last = first_author.split()[-1] if first_author else "Unknown"
+                    author_str = f"{first_author_last} et al."
+            else:
+                author_str = "Unknown"
+            
+            year = result.get('year', 'Unknown')
+            title = result.get('title', 'Unknown')[:80]
+            url = result.get('url', '')
+            
+            finalize_prompt += f"{idx}. **[{author_str}, {year}]** - {title}\n"
+            if url:
+                finalize_prompt += f"   URL: {url}\n"
+        
+        finalize_prompt += """
+
+**CITATION INSTRUCTIONS:**
+- When citing the papers above, use the EXACT format: [AuthorLastName et al., Year]
+- Example: If the list shows "[Xu et al., 2020]", cite it exactly as [Xu et al., 2020]
+- Only cite papers from the list above - do NOT cite papers from your training data
+- Each citation should match one of the formats shown in the list
 """
     
     # Add output_format requirements if specified (similar to create_plan and re_plan)

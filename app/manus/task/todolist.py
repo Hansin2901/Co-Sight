@@ -40,6 +40,8 @@ class Plan:
         # 新增：步骤执行工具记录
         self.step_tools = {step: [] for step in self.steps}  # 记录每个步骤使用的工具
         self.facts = ""
+        # NEW: Track all search results for citation URL injection
+        self.search_results = []  # List of {url, title, authors, year, source_tool, arxiv_id, ...}
         # 使用邻接表表示依赖关系
         if dependencies:
             self.dependencies = dependencies
@@ -203,6 +205,45 @@ class Plan:
 
         return self.step_tools[self.steps[step_index]]
 
+    def add_search_result(self, url: str, title: str, source_tool: str, 
+                          authors: List[str] = None, year: int = None,
+                          arxiv_id: str = None, description: str = None,
+                          metadata: Dict = None) -> None:
+        """Add a search result for citation URL tracking.
+        
+        Args:
+            url: The URL of the source
+            title: Title of the paper/webpage
+            source_tool: Name of the tool that found this (e.g., 'search_papers', 'search_google')
+            authors: List of author names
+            year: Publication year
+            arxiv_id: ArXiv ID if applicable
+            description: Brief description/summary
+            metadata: Any additional metadata
+        """
+        # Check for duplicates by URL
+        for existing in self.search_results:
+            if existing.get('url') == url:
+                return  # Already exists, skip
+        
+        result = {
+            'url': url,
+            'title': title,
+            'source_tool': source_tool,
+            'authors': authors or [],
+            'year': year,
+            'arxiv_id': arxiv_id,
+            'description': description,
+            'metadata': metadata or {},
+            'timestamp': datetime.now().isoformat()
+        }
+        self.search_results.append(result)
+        print(f"[SearchResults] Added: {title[:50]}... from {source_tool}")
+
+    def get_search_results(self) -> List[Dict]:
+        """Get all collected search results for citation matching."""
+        return self.search_results
+
     def format(self, with_detail: bool = False) -> str:
         """Format the plan for display."""
         output = f"Plan: {self.title}\n"
@@ -238,6 +279,37 @@ class Plan:
 
             if self.step_notes.get(step):
                 output += f"   Notes: {self.step_notes.get(step)}\nDetails: {self.step_details.get(step)}\n" if with_detail else f"   Notes: {self.step_notes.get(step)}\n"
+
+        # Add search results section for citation generation
+        if self.search_results:
+            output += "\n" + "=" * 60 + "\n"
+            output += "AVAILABLE SOURCES FOR CITATIONS:\n"
+            output += "=" * 60 + "\n\n"
+
+            for idx, result in enumerate(self.search_results, 1):
+                # Extract author info and format citation
+                authors = result.get('authors', [])
+                if authors:
+                    if len(authors) == 1:
+                        author_citation = authors[0].split()[-1]  # Just last name
+                    else:
+                        # First author last name + "et al."
+                        author_citation = f"{authors[0].split()[-1]} et al."
+                else:
+                    author_citation = "Unknown"
+
+                year = result.get('year', 'Unknown')
+                title = result.get('title', 'Untitled')[:100]  # Truncate long titles
+                url = result.get('url', 'No URL')
+
+                # Format: Citation format | Title | URL
+                output += f"{idx}. [{author_citation}, {year}]\n"
+                output += f"   Title: {title}\n"
+                output += f"   URL: {url}\n\n"
+
+            output += f"Total sources: {len(self.search_results)}\n"
+            output += "CITATION FORMAT: Use EXACTLY [AuthorLastName et al., Year] as shown above.\n"
+            output += "=" * 60 + "\n"
 
         return output
 

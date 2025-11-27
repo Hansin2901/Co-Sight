@@ -165,7 +165,7 @@ Ensure your final answer contains only the content in the following format: {out
     return replan_prompt
 
 
-def planner_finalize_plan_prompt(question, plan, output_format=""):
+def planner_finalize_plan_prompt(question, plan, output_format="", search_results=None):
     finalize_prompt = f"""
 现在请根据我们的对话，为原始任务给出最终答案: <task>{question}</task>
 
@@ -175,9 +175,57 @@ Plan status:
 请特别注意答案呈现的格式。
 你应首先分析题目要求的答案格式，然后输出符合格式要求的最终答案。
 你的回复应包含以下内容：
-- `analysis`：用<analysis> </analysis>包裹，内容为对推理过程结果的详细分析。你必须总结重要中间结果的置信水平，评估结论仅可从“完全确信(100 percentage)”“非常可信(80 percentage)”“一般可信(70 percentage)”“不确定(50 percentage)” 中选取。
+- `analysis`：用<analysis> </analysis>包裹，内容为对推理过程结果的详细分析。你必须总结重要中间结果的置信水平，评估结论仅可从"完全确信(100 percentage)""非常可信(80 percentage)""一般可信(70 percentage)""不确定(50 percentage)" 中选取。
 - `final_answer`：用<final_answer> </final_answer>包裹，内容为该问题的最终答案。
+"""
+    
+    # Add search results for citation generation
+    if search_results:
+        finalize_prompt += """
 
+## 可用引用来源
+
+以下是研究过程中找到的论文。引用时请使用如下精确格式：
+
+"""
+        for idx, result in enumerate(search_results[:50], 1):
+            authors = result.get('authors', [])
+            if authors:
+                if len(authors) == 1:
+                    first_author = authors[0]
+                    author_str = first_author.split()[-1] if first_author else "Unknown"
+                else:
+                    first_author = authors[0]
+                    first_author_last = first_author.split()[-1] if first_author else "Unknown"
+                    author_str = f"{first_author_last} et al."
+            else:
+                author_str = "Unknown"
+            
+            year = result.get('year', 'Unknown')
+            title = result.get('title', 'Unknown')[:80]
+            url = result.get('url', '')
+            
+            finalize_prompt += f"{idx}. **[{author_str}, {year}]** - {title}\n"
+            if url:
+                finalize_prompt += f"   URL: {url}\n"
+        
+        finalize_prompt += """
+
+**引用说明：**
+- 引用上述论文时，使用精确格式：[作者姓 et al., 年份]
+- 示例：如果列表显示"[Xu et al., 2020]"，引用时写成 [Xu et al., 2020]
+- 仅引用上述列表中的论文，不要引用训练数据中的论文
+"""
+    
+    if output_format:
+        finalize_prompt += f"""
+<output_format_requirements> 
+请确保最终答案遵循以下格式要求：
+{output_format}
+</output_format_requirements>
+"""
+    else:
+        finalize_prompt += """
 以下是关于最终答案的一些提示：
 <hint>
 你的最终答案必须严格按照题目指定的格式输出，并保持简洁：
@@ -185,4 +233,5 @@ Plan status:
 - 答案请保持简洁，不用复述题目
 </hint>
 """
+    
     return finalize_prompt

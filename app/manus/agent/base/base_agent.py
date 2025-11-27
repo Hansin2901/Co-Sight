@@ -163,6 +163,137 @@ class BaseAgent:
         
         return f"{prefix}: {name_parts}"
 
+    def _extract_and_store_search_results(self, tool_name: str, result_str: str, plan: Plan) -> None:
+        """
+        Extract search results from tool outputs and store them in the plan for citation URL tracking.
+        
+        Handles different search tool output formats:
+        - search_papers (ArXiv): Returns list of paper dicts with title, authors, entry_id, pdf_url
+        - search_google/duckduckgo: Returns list of dicts with title, url, description
+        - fetch_website_content: Returns content from a URL
+        """
+        print(f"[SearchResults] _extract_and_store_search_results called with tool_name={tool_name}")
+        
+        if not plan:
+            print(f"[SearchResults] No plan provided, skipping")
+            return
+        if not result_str:
+            print(f"[SearchResults] No result_str provided, skipping")
+            return
+        
+        # Determine which search tools to extract from
+        search_tools = {
+            'search_papers': 'arxiv',
+            'search_google': 'google',
+            'search_duckduckgo': 'duckduckgo',
+            'search_wiki': 'wikipedia',
+            'search_wiki_history_url': 'wikipedia',
+            'fetch_website_content': 'web_scraping',
+            'deep_search': 'deep_search',
+            'search_tavily': 'tavily',
+        }
+        
+        tool_type = search_tools.get(tool_name)
+        if not tool_type:
+            print(f"[SearchResults] Tool '{tool_name}' is not a search tool, skipping")
+            return  # Not a search tool
+        
+        print(f"[SearchResults] Processing {tool_type} results from {tool_name}")
+        print(f"[SearchResults] Result string length: {len(result_str)}, first 200 chars: {result_str[:200]}...")
+        
+        try:
+            # Try to parse result as JSON (list of results)
+            import re
+            
+            # Handle case where result is a string representation of a list
+            if result_str.strip().startswith('['):
+                print(f"[SearchResults] Parsing as JSON array")
+                results = json.loads(result_str)
+            elif result_str.strip().startswith('{'):
+                print(f"[SearchResults] Parsing as single JSON object")
+                results = [json.loads(result_str)]
+            else:
+                # Try to find JSON array in the result
+                print(f"[SearchResults] Looking for JSON array in result")
+                json_match = re.search(r'\[.*\]', result_str, re.DOTALL)
+                if json_match:
+                    print(f"[SearchResults] Found JSON array pattern")
+                    results = json.loads(json_match.group())
+                else:
+                    print(f"[SearchResults] No parseable JSON found, skipping")
+                    return  # Not parseable
+            
+            if not isinstance(results, list):
+                results = [results]
+            
+            print(f"[SearchResults] Parsed {len(results)} results")
+            
+            for item in results:
+                if not isinstance(item, dict):
+                    continue
+                
+                # Extract URL based on tool type
+                url = None
+                title = None
+                authors = []
+                year = None
+                arxiv_id = None
+                description = None
+                
+                if tool_type == 'arxiv':
+                    # ArXiv search results format
+                    url = item.get('pdf_url') or item.get('entry_id')
+                    title = item.get('title')
+                    authors = item.get('authors', [])
+                    # Extract year from published_date
+                    pub_date = item.get('published_date', '')
+                    if pub_date:
+                        year_match = re.search(r'(\d{4})', pub_date)
+                        if year_match:
+                            year = int(year_match.group(1))
+                    # Extract arxiv ID
+                    entry_id = item.get('entry_id', '')
+                    if entry_id:
+                        arxiv_match = re.search(r'(\d+\.\d+)', entry_id)
+                        if arxiv_match:
+                            arxiv_id = arxiv_match.group(1)
+                    description = item.get('summary', item.get('paper_text', ''))[:500]
+                    
+                elif tool_type in ['google', 'duckduckgo', 'tavily', 'deep_search']:
+                    # Web search results format
+                    url = item.get('url') or item.get('link')
+                    title = item.get('title')
+                    description = item.get('description') or item.get('snippet') or item.get('long_description')
+                    # Try to extract year from description if present
+                    if description:
+                        year_match = re.search(r'\b(19\d{2}|20\d{2})\b', description[:200])
+                        if year_match:
+                            year = int(year_match.group(1))
+                    
+                elif tool_type == 'wikipedia':
+                    url = item.get('url') or item.get('link')
+                    title = item.get('title')
+                    description = item.get('description') or item.get('extract')
+                
+                # Only add if we have both URL and title
+                if url and title:
+                    plan.add_search_result(
+                        url=url,
+                        title=title,
+                        source_tool=tool_name,
+                        authors=authors,
+                        year=year,
+                        arxiv_id=arxiv_id,
+                        description=description[:500] if description else None,
+                        metadata={'raw_item': item}
+                    )
+                    print(f"[SearchResults] Added: {title[:50]}... -> {url[:60]}...")
+                    
+        except (json.JSONDecodeError, TypeError, KeyError) as e:
+            print(f"[SearchResults] Failed to parse results from {tool_name}: {e}")
+        except Exception as e:
+            print(f"[SearchResults] Unexpected error extracting from {tool_name}: {e}")
+
     @observe(name="base_agent_execute")
     def execute(self, messages: List[Dict[str, Any]], step_index=None, plan: Plan = None, max_iteration=10):
         print(f"\n[DEBUG] === BASE_AGENT EXECUTE START ===")
@@ -299,6 +430,16 @@ class BaseAgent:
                                 result=result['content']
                             )
                             print(f"[DEBUG] Tool execution recorded")
+                            
+                            # NEW: Extract and store search results for citation URL tracking
+                            self._extract_and_store_search_results(
+                                tool_name=result['name'],
+                                result_str=result['content'],
+                                plan=plan
+                            )
+                            # Debug: Show total search results collected
+                            if plan:
+                                print(f"[SearchResults] Total collected: {len(plan.search_results)}")
                     except JSONDecodeError as e:
                         print(f"Error recording tool execution: {e}, function_args={json_function_args}  {traceback.format_exc()}")
                     except Exception as e:
@@ -404,7 +545,11 @@ class BaseAgent:
                 print(f"[DEBUG] Sync function completed")
 
             print(f"[DEBUG] Converting result to string (first 200 chars): {str(result)[:200]}...")
-            result_str = str(result)
+            # Convert to JSON if dict/list for proper parsing later, otherwise use str()
+            if isinstance(result, (dict, list)):
+                result_str = json.dumps(result, ensure_ascii=False)
+            else:
+                result_str = str(result)
             
             # Update span with result metadata
             if is_langfuse_enabled():
@@ -486,10 +631,15 @@ class BaseAgent:
                 result = asyncio.run(
                     MCPEngine.invoke_mcp_tool(mcp_tool['mcp_name'], mcp_tool['mcp_config'], tool_name,
                                               args_dict))
+                # Convert to JSON if dict/list for proper parsing later
+                if isinstance(result, (dict, list)):
+                    result_str = json.dumps(result, ensure_ascii=False)
+                else:
+                    result_str = str(result)
                 return {
                     "role": "tool",
                     "name": function_name,
-                    "content": str(result),
+                    "content": result_str,
                     "tool_call_id": tool_call_id,
                     "function_args": function_args
                 }

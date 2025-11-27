@@ -80,6 +80,13 @@ def reportbench(
             print(f'Error: {error_result}')
             print(traceback.format_exc())
         
+        # Try to extract citation metadata from the executor (if available)
+        citation_metadata = None
+        if hasattr(process_message, 'last_citation_metadata'):
+            citation_metadata = process_message.last_citation_metadata
+            if citation_metadata:
+                print(f'[Citation Stats] Match rate: {citation_metadata.get("match_rate", 0):.1%}')
+        
         end_time = datetime.datetime.today()
         time_diff = end_time - start_time
         timestr = datetime.datetime.today().strftime('%Y-%m-%d %H:%M:%S')
@@ -118,6 +125,34 @@ def reportbench(
             "score": eval_metrics["quality_score"],  # For compatibility with save_results
             **eval_metrics
         }
+        
+        # Add citation metadata if available
+        if citation_metadata:
+            result["citation_metadata"] = {
+                "total_citations": citation_metadata.get("total_citations", 0),
+                "matched_count": citation_metadata.get("matched_count", 0),
+                "unmatched_count": citation_metadata.get("unmatched_count", 0),
+                "match_rate": citation_metadata.get("match_rate", 0.0),
+                "search_results_count": citation_metadata.get("search_results_count", 0),
+                "confidence_threshold": citation_metadata.get("confidence_threshold", 0.6),
+                "matched_citations": [
+                    {
+                        "citation": m.get("citation"),
+                        "url": m.get("url"),
+                        "confidence": m.get("confidence"),
+                        "source_title": m.get("source_title")
+                    }
+                    for m in citation_metadata.get("matched_citations", [])
+                ],
+                "unmatched_citations": [
+                    {
+                        "citation": u.get("citation"),
+                        "authors": u.get("authors"),
+                        "year": u.get("year")
+                    }
+                    for u in citation_metadata.get("unmatched_citations", [])
+                ]
+            }
         
         results.append(result)
         

@@ -83,6 +83,7 @@ class ArxivToolkit:
             query: str,
             paper_ids: Optional[List[str]] = None,
             max_results: Optional[int] = 5,
+            max_date: Optional[str] = None,
     ) -> List[Dict[str, str]]:
         r"""Searches for academic papers on arXiv using a query string and
         optional paper IDs.
@@ -93,6 +94,9 @@ class ArxivToolkit:
                 IDs to search for. (default: :obj: `None`)
             max_results (int, optional): The maximum number of search results
                 to return. (default: :obj: `5`)
+            max_date (str, optional): Maximum publication date in format 
+                'YYYY-MM-DD' or 'YYYY-MM'. Papers published after this date 
+                will be excluded. (default: :obj: `None`)
 
         Returns:
             List[Dict[str, str]]: A list of dictionaries, each containing

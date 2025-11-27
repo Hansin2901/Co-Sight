@@ -22,6 +22,7 @@ from pathlib import Path
 
 from app.manus.manus import Manus
 from app.manus.llm.langfuse_config import initialize_langfuse, shutdown_langfuse
+from app.manus.utils.citation_matcher import inject_citation_urls, format_citation_report
 from evals.reportbench import reportbench
 from llm import llm_for_plan, llm_for_act, llm_for_tool, llm_for_vision
 
@@ -38,16 +39,85 @@ RESULTS_PATH = (
         Path(__file__).parent / "results" / "ReportBench"
 )
 
+COSIGHT_OUTPUTS_PATH = (
+        Path(__file__).parent / "Co-Sight-outputs"
+)
+
 
 def manus_executor():
-    """Create Manus executor function."""
+    """Create Manus executor function with citation URL injection."""
     def execute(question, output_format=""):
         manus = Manus(llm_for_plan, llm_for_act, llm_for_tool, llm_for_vision)
         result = manus.execute(question, output_format=output_format)
         print(f"Final result length: {len(result) if result else 0} characters")
+        
+        # Post-process: Inject URLs into citations
+        if result:
+            search_results = manus.get_search_results()
+            print(f"\n[Citation Injection] Found {len(search_results)} search results for URL matching")
+            
+            if search_results:
+                try:
+                    enhanced_report, citation_metadata = inject_citation_urls(
+                        report_text=result,
+                        search_results=search_results,
+                        confidence_threshold=0.5  # Lower threshold for better recall
+                    )
+                    
+                    # Log citation matching statistics
+                    print(f"[Citation Injection] Results:")
+                    print(f"  - Total citations found: {citation_metadata.get('total_citations', 0)}")
+                    print(f"  - Successfully matched: {citation_metadata.get('matched_count', 0)}")
+                    print(f"  - Unmatched: {citation_metadata.get('unmatched_count', 0)}")
+                    print(f"  - Match rate: {citation_metadata.get('match_rate', 0):.1%}")
+                    
+                    # Store citation metadata for later analysis
+                    # This will be available if we need to add it to the output
+                    execute.last_citation_metadata = citation_metadata
+                    
+                    # Print detailed report if there were matches
+                    if citation_metadata.get('matched_count', 0) > 0:
+                        print(format_citation_report(citation_metadata))
+                    
+                    result = enhanced_report
+                    print(f"[Citation Injection] Enhanced report length: {len(result)} characters")
+                except Exception as e:
+                    print(f"[Citation Injection] Error during URL injection: {e}")
+                    traceback.print_exc()
+            else:
+                print("[Citation Injection] No search results available - skipping URL injection")
+        
         return result
 
+    # Initialize metadata storage
+    execute.last_citation_metadata = None
     return execute
+
+
+def save_to_cosight_outputs(results: list):
+    """Save results to Co-Sight-outputs directory for ReportBench evaluation."""
+    os.makedirs(COSIGHT_OUTPUTS_PATH, exist_ok=True)
+    
+    for result in results:
+        if not result.get("success") or not result.get("report"):
+            continue
+            
+        arxiv_id = result.get("arxiv_id", "unknown")
+        output_file = COSIGHT_OUTPUTS_PATH / f"{arxiv_id}.json"
+        
+        output_data = {
+            "response": result["report"],
+            "arxiv_id": arxiv_id,
+            "query": result.get("prompt", ""),
+            "references": []
+        }
+        
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(output_data, f, indent=2, ensure_ascii=False)
+            print(f"✅ Saved to Co-Sight-outputs: {output_file}")
+        except Exception as e:
+            print(f"❌ Error saving to Co-Sight-outputs: {e}")
 
 
 def save_results(results: list, results_path: str):
@@ -63,6 +133,21 @@ def save_results(results: list, results_path: str):
         else:
             avg_quality = avg_word_count = avg_citations = avg_duration = 0
 
+        # Calculate citation URL injection statistics
+        with_citation_metadata = [r for r in successful if r.get("citation_metadata")]
+        if with_citation_metadata:
+            avg_citation_match_rate = sum(
+                r["citation_metadata"].get("match_rate", 0) for r in with_citation_metadata
+            ) / len(with_citation_metadata)
+            avg_matched_citations = sum(
+                r["citation_metadata"].get("matched_count", 0) for r in with_citation_metadata
+            ) / len(with_citation_metadata)
+            avg_search_results = sum(
+                r["citation_metadata"].get("search_results_count", 0) for r in with_citation_metadata
+            ) / len(with_citation_metadata)
+        else:
+            avg_citation_match_rate = avg_matched_citations = avg_search_results = 0
+
         data = {
             "eval": {
                 "model": os.environ.get("MODEL_NAME"),
@@ -76,6 +161,13 @@ def save_results(results: list, results_path: str):
                 "avg_citations": avg_citations,
                 "avg_duration_seconds": avg_duration,
                 "date": datetime.datetime.today().strftime('%Y-%m-%d %H:%M:%S'),
+                # Citation URL injection stats
+                "citation_injection_stats": {
+                    "tasks_with_citation_data": len(with_citation_metadata),
+                    "avg_citation_match_rate": avg_citation_match_rate,
+                    "avg_matched_citations_per_report": avg_matched_citations,
+                    "avg_search_results_per_report": avg_search_results,
+                }
             },
             "detail": results
         }
@@ -121,7 +213,8 @@ if __name__ == '__main__':
     results = reportbench(
         process_message=execute_fn,
         task_id=[
-            "2312.04861",  # Radar data representation in autonomous driving
+            "2206.05498",
+            "2207.14394"  # Radar data representation in autonomous driving
             # Add more arxiv_ids here or remove task_id to run all
         ],
         postcall=save_results
@@ -131,6 +224,9 @@ if __name__ == '__main__':
     datestr = datetime.datetime.today().strftime('%Y%m%d%H%M%S')
     final_results_path = RESULTS_PATH / f'reportbench_final_{datestr}.json'
     save_results(results, final_results_path.as_posix())
+    
+    # Also save to Co-Sight-outputs for ReportBench evaluation
+    save_to_cosight_outputs(results)
 
     # Print summary
     successful = [r for r in results if r["success"]]
@@ -148,5 +244,19 @@ if __name__ == '__main__':
         print(f"Avg Quality Score:  {avg_quality*100:.0f}%")
         print(f"Avg Word Count:     {avg_word_count:,.0f}")
         print(f"Avg Citations:      {avg_citations:.0f}")
+        
+        # Citation URL injection stats
+        with_citation_metadata = [r for r in successful if r.get("citation_metadata")]
+        if with_citation_metadata:
+            avg_match_rate = sum(
+                r["citation_metadata"].get("match_rate", 0) for r in with_citation_metadata
+            ) / len(with_citation_metadata)
+            avg_matched = sum(
+                r["citation_metadata"].get("matched_count", 0) for r in with_citation_metadata
+            ) / len(with_citation_metadata)
+            print(f"\n--- Citation URL Injection ---")
+            print(f"Reports with URLs:  {len(with_citation_metadata)}")
+            print(f"Avg Match Rate:     {avg_match_rate*100:.0f}%")
+            print(f"Avg URLs Injected:  {avg_matched:.1f}")
     
     print("="*80 + "\n")

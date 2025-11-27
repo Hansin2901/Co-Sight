@@ -68,8 +68,10 @@ class TaskPlannerAgent(BaseAgent):
 
     @observe(name="planner_finalize")
     def finalize_plan(self, question, output_format=""):
+        # Get search results for citation generation
+        search_results = self.plan.get_search_results() if hasattr(self.plan, 'get_search_results') else []
         self.history.append(
-            {"role": "user", "content": planner_finalize_plan_prompt(question, self.plan.format(), output_format)})
+            {"role": "user", "content": planner_finalize_plan_prompt(question, self.plan.format(), output_format, search_results)})
         raw_result = self.execute(self.history, max_iteration=1)
         result = self.extract_pattern(raw_result, "final_answer")
         print(f"raw_resultesult is >>{raw_result}<<, result is {result}")
@@ -78,8 +80,10 @@ class TaskPlannerAgent(BaseAgent):
         return result
 
     def finalize_plan_hle(self, question, output_format=""):
+        # Get search results for citation generation
+        search_results = self.plan.get_search_results() if hasattr(self.plan, 'get_search_results') else []
         self.history.append(
-            {"role": "user", "content": planner_finalize_plan_prompt(question, self.plan.format(), output_format)})
+            {"role": "user", "content": planner_finalize_plan_prompt(question, self.plan.format(), output_format, search_results)})
         raw_result = self.execute(self.history, max_iteration=1)
         result = self.extract_pattern(raw_result, "final_answer")
         print(f"raw_resultesult is >>{raw_result}<<, result is {result}")

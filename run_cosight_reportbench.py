@@ -77,17 +77,21 @@ Organize findings by themes/categories with clear subsections:
 - Overall assessment of the field's progress
 
 **CRITICAL REQUIREMENTS:**
-1. **Citations**: Include inline citations for ALL claims using format: [Author et al., Year] or [Paper Title, Year]
+1. **Citations**: Include inline citations for ALL claims using this EXACT format:
+   - Use [FirstAuthorLastName et al., Year] format for all citations
    - Example: "Recent work by [Smith et al., 2024] demonstrates..."
-   - Example: "As shown in [Deep Learning for Autonomous Vehicles, 2023]..."
+   - Example: "The LayoutLM model [Xu et al., 2020] introduced..."
+   - IMPORTANT: Only cite papers from the "AVAILABLE SOURCES FOR CITATIONS" list provided above
+   - DO NOT cite papers from your training data that you didn't actually search for
+   - Match the exact author names and years from the sources list
 2. **Length**: Target 3000-5000 words for comprehensive coverage
 3. **Structure**: Use clear markdown headers (##, ###) for organization
 4. **Synthesis**: Don't just list papers - synthesize and compare approaches
 5. **Technical depth**: Include technical details appropriate for academic audience
 6. **Multiple sources**: Draw information from multiple papers, comparing and contrasting
 
-Remember: You have access to paper titles, authors, publication dates, and summaries from your research steps. 
-Use this information to create properly formatted citations throughout the report.
+Remember: You have access to paper titles, authors, publication dates, and summaries from your research steps.
+Use ONLY the papers from the "AVAILABLE SOURCES FOR CITATIONS" list when creating citations.
 """
 
 
